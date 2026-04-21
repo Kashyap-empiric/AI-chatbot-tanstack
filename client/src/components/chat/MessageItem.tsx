@@ -16,7 +16,13 @@ const Avatar = ({ role }: { role: string }) => {
   );
 };
 
-const MessageItem = ({ message, isTyping }: { message: Message; isTyping: boolean }) => {
+const MessageItem = ({
+  message,
+  isTyping,
+}: {
+  message: Message;
+  isTyping: boolean;
+}) => {
   const isUser = message.role === "user";
 
   return (
@@ -39,7 +45,7 @@ const MessageItem = ({ message, isTyping }: { message: Message; isTyping: boolea
             </div>
           )}
 
-          {!isUser && isTyping && message.content === "" && (
+          {!isUser && isTyping && (
             <TypingIndicator />
           )}
         </div>

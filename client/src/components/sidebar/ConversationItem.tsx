@@ -5,19 +5,15 @@ import {
   useDeleteConversation,
   useUpdateConversationTitle,
 } from "../../features/conversation/queries";
-import { useConversationStore } from "../../features/conversation/store";
-import { useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 
 interface Props {
   conversation: Conversation;
-  isActive: boolean;
-  onClick: () => void;
 }
 
-const ConversationItem = ({ conversation, isActive, onClick }: Props) => {
+const ConversationItem = ({ conversation }: Props) => {
   const navigate = useNavigate();
-  const { activeConversationId, setActiveConversation } =
-    useConversationStore();
+  const { id: activeConversationId } = useParams();
 
   const { mutateAsync: deleteConversation } = useDeleteConversation();
   const { mutateAsync: updateConversationTitle } = useUpdateConversationTitle();
@@ -25,12 +21,22 @@ const ConversationItem = ({ conversation, isActive, onClick }: Props) => {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(conversation.title);
 
+  const isActive = activeConversationId === conversation.id;
+
+  const handleSelect = () => {
+    if (!editing) {
+      navigate(`/app/chat/${conversation.id}`);
+    }
+  };
+
   const handleDelete = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    const isActive = activeConversationId === conversation.id;
+
+    const wasActive = isActive;
+
     await deleteConversation(conversation.id);
-    if (isActive) {
-      setActiveConversation(null);
+
+    if (wasActive) {
       navigate("/app");
     }
   };
@@ -48,24 +54,25 @@ const ConversationItem = ({ conversation, isActive, onClick }: Props) => {
     if (trimmed !== conversation.title) {
       await updateConversationTitle({
         id: conversation.id,
-        title: trimmed, // (better than raw title variable)
+        title: trimmed,
       });
     }
   };
 
   return (
     <div
-      onClick={!editing ? onClick : undefined}
+      onClick={handleSelect}
       className={`
         group flex items-center justify-between gap-2
         px-3 py-2 rounded-lg cursor-pointer
         transition-all duration-200
+        min-w-0
         ${isActive ? "bg-neutral-800" : "hover:bg-neutral-900"}
       `}
     >
       {editing ? (
         <input
-          className="text-base bg-transparent outline-none text-neutral-200 w-full"
+          className="text-base bg-transparent outline-none text-neutral-200 w-full min-w-0"
           value={title}
           autoFocus
           onChange={(e) => setTitle(e.target.value)}
@@ -75,12 +82,12 @@ const ConversationItem = ({ conversation, isActive, onClick }: Props) => {
           }}
         />
       ) : (
-        <span className="text-base truncate text-neutral-200">
+        <span className="text-base truncate text-neutral-200 min-w-0 flex-1">
           {conversation.title}
         </span>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {!editing && (
           <button
             onClick={(e) => {
@@ -111,5 +118,6 @@ const ConversationItem = ({ conversation, isActive, onClick }: Props) => {
     </div>
   );
 };
+
 
 export default ConversationItem;

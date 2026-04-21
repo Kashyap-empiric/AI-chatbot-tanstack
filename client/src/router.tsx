@@ -5,10 +5,10 @@ import { SignIn, SignUp, useUser } from "@clerk/react";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn } = useUser();
+
   if (!isLoaded) return <div>Loading...</div>;
-  if (!isSignedIn) {
-    return <Navigate to="/sign-in" replace />;
-  }
+  if (!isSignedIn) return <Navigate to="/sign-in" replace />;
+
   return children;
 }
 
@@ -16,7 +16,7 @@ export default function Router() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Auth */}
+        {/* Auth routes */}
         <Route
           path="/sign-in"
           element={
@@ -33,7 +33,8 @@ export default function Router() {
             </div>
           }
         />
-        {/* Protected app shell */}
+
+        {/* Protected app layout */}
         <Route
           path="/app"
           element={
@@ -42,14 +43,11 @@ export default function Router() {
             </ProtectedRoute>
           }
         >
-          {/* default home state */}
           <Route index element={<ChatHome />} />
-
-          {/* active chat */}
-          <Route path="chat/:id" element={<ChatPage />} />
+          <Route path="chat/:id" element={<ChatHome />} />
         </Route>
 
-        {/* Redirects */}
+        {/* fallback */}
         <Route path="/" element={<Navigate to="/app" replace />} />
         <Route path="*" element={<Navigate to="/app" replace />} />
       </Routes>

@@ -1,11 +1,15 @@
 import { useEffect, useRef } from "react";
+import { useParams } from "react-router-dom";
 import MessageItem from "./MessageItem";
 import { useMessages } from "../../features/chat/queries";
-import { useConversationStore } from "../../features/conversation/store";
 
 const MessageList = () => {
-  const { activeConversationId } = useConversationStore();
-  const { data: messages = [], isLoading } = useMessages(activeConversationId);
+  const { id: conversationId } = useParams();
+
+  const {
+    data: messages = [],
+    isLoading,
+  } = useMessages(conversationId);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -13,10 +17,17 @@ const MessageList = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ADD THIS LINE
   const typingMessage = messages.find(
     (m) => m.role === "model" && m.content === ""
   );
+
+  if (!conversationId) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-neutral-400">
+        Select a conversation
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -25,6 +36,7 @@ const MessageList = () => {
       </div>
     );
   }
+
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 flex justify-center w-full bg-[#212121]">
@@ -42,6 +54,5 @@ const MessageList = () => {
     </div>
   );
 };
-
 
 export default MessageList;

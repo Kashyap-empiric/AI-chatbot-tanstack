@@ -1,21 +1,17 @@
 import MessageList from "./MessageList";
 import ChatInput from "./ChatInput";
-import { useConversationStore } from "../../features/conversation/store";
 import ChatHome from "./ChatHome";
+import { useParams } from "react-router-dom";
 
 const ChatWindow = () => {
-  const { activeConversationId } = useConversationStore();
+  const { id } = useParams();
 
-  if (!activeConversationId) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-white bg-[#212121]">
-        < ChatHome />
-      </div>
-    );
+  if (!id) {
+    return <ChatHome />;
   }
 
   return (
-    <div className="flex flex-col flex-1 bg-[#212121] text-white items-center">
+    <div className="flex flex-col flex-1 bg-[#212121] text-white">
       <MessageList />
       <ChatInput />
     </div>
