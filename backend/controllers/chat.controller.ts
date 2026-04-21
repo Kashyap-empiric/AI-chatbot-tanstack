@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import Message from "../models/Message.ts";
 import Conversation from "../models/Conversation.ts";
 import { GoogleGenAI } from "@google/genai";
+import { getAuth } from "@clerk/express";
 
 const getGeminiClient = () => {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -20,11 +21,18 @@ const toMessageDTO = (doc: any) => ({
 
 export const chat = async (req: Request, res: Response) => {
     try {
+        const { userId } = getAuth(req);
         const gemini = getGeminiClient();
         const { conversationId, content, model } = req.body;
+        const conversation = await Conversation.findOne({ _id: conversationId, userId});
+        if (!conversation) {
+            return res.status(404).json({ error: "Conversation not found" });
+        }
+
         const selectedModel = model || process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
 
         const userMsg = await Message.create({
+            userId,
             conversationId, role: "user", content, status: "sent"
         });
 
@@ -32,8 +40,6 @@ export const chat = async (req: Request, res: Response) => {
             lastMessageAt: new Date(),
             $inc: { messageCount: 1 },
         })
-
-        const conversation = await Conversation.findById(conversationId);
 
         if (conversation && conversation.title === "New Conversation") {
             const newTitle = content.trim().slice(0, 25);
@@ -58,6 +64,7 @@ export const chat = async (req: Request, res: Response) => {
         } catch (err: any) {
             console.error("Gemini API Error");
             const errorMsg = await Message.create({
+                userId,
                 conversationId,
                 role: "model",
                 content: "Sorry, this model is not available right now.",
@@ -79,6 +86,7 @@ export const chat = async (req: Request, res: Response) => {
         const model_version = response?.modelVersion || null;
 
         const modelMsg = await Message.create({
+            userId,
             conversationId, role: "model", content: reply, status: "error"
         })
 

@@ -20,11 +20,11 @@ const messageSchema = new mongoose.Schema({
       enum: ["pending", "sent", "error"],
       default: "sent"
     },
-    tokens: {
-      input: { type: Number, default: 0 },
-      output: { type: Number, default: 0 }
-    },
-     parentMessageId: {
+    // tokens: {
+    //   input: { type: Number, default: 0 },
+    //   output: { type: Number, default: 0 }
+    // },
+    parentMessageId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Message",
       default: null

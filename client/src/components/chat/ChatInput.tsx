@@ -17,6 +17,7 @@ const ChatInput = () => {
       conversationId: activeConversationId,
       content: trimmed,
     });
+    console.log("after send");
 
     setInput("");
   };

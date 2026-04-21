@@ -5,7 +5,7 @@ import { useConversationStore } from "../../features/conversation/store";
 
 const MessageList = () => {
   const { activeConversationId } = useConversationStore();
-  const { data: messages, isLoading} = useMessages(activeConversationId);
+  const { data: messages = [], isLoading } = useMessages(activeConversationId);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -27,7 +27,7 @@ const MessageList = () => {
         {messages.map((msg) => (
           <MessageItem key={msg.id} message={msg} />
         ))}
-        <div ref={bottomRef} className="h-1"/>
+        <div ref={bottomRef} className="h-1" />
       </div>
     </div>
   );

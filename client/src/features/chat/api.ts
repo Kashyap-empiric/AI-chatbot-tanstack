@@ -1,12 +1,23 @@
 import { http } from '../../services/http';
-import type { Message } from './types';
+import type { ApiMessage } from './types';
 
-export const fetchMessage = async (conversationId: string): Promise<Message[]> => {
-    const res = await http.get(`/conversation/${conversationId}`);
-    return res.data;
+interface SendMessagePayload {
+    conversationId: string;
+    content: string;
 }
 
-export const sendMessage = async ({ conversationId, content }) => {
-    const res = await http.post("/chat", {conversationId, content});
+interface SendMessageResponse {
+    messages: ApiMessage[];
+    model_version: string | null;
+    model_selected: string;
+}
+
+export const fetchMessage = async (conversationId: string): Promise<ApiMessage[]> => {
+    const res = await http.get(`/conversation/${conversationId}`);
+    return Array.isArray(res.data) ? res.data : [];
+}
+
+export const sendMessage = async ( payload: SendMessagePayload ): Promise<SendMessageResponse> => {
+    const res = await http.post("/chat", payload);
     return res.data;
 }
