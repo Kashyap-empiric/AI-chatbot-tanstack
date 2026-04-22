@@ -31,17 +31,17 @@ body {
   animation: fadeIn 0.2s ease-out;
 }
 
-/* global css */
-::-webkit-scrollbar {
+.custom-scrollbar::-webkit-scrollbar {
   height: 5px;
   width: 10px;
 }
 
-::-webkit-scrollbar-thumb {
+.custom-scrollbar::-webkit-scrollbar-thumb {
   background: #374151;
   border-radius: 999px;
 }
 
-::-webkit-scrollbar-track {
+.custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
+

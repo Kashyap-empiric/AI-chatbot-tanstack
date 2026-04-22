@@ -37,10 +37,9 @@ const MessageList = () => {
     );
   }
 
-
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 flex justify-center w-full bg-[#212121]">
-      <div className="w-full max-w-screen-lg space-y-4">
+    <div className="flex-1 overflow-y-auto flex justify-center w-full bg-[#212121]">
+      <div className="max-w-4xl w-full px-4 md:px-6 space-y-4">
         {messages.map((msg) => (
           <MessageItem
             key={msg.id}

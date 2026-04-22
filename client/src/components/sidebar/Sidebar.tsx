@@ -1,13 +1,13 @@
 import { useNavigate } from "react-router-dom";
 import ConversationItem from "./ConversationItem";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import {
   useConversations,
   useCreateConversation,
 } from "../../features/conversation/queries";
 import { UserButton, useUser } from "@clerk/react";
 
-const Sidebar = () => {
+const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   const navigate = useNavigate();
   const { user } = useUser();
 
@@ -17,22 +17,32 @@ const Sidebar = () => {
   const handleNewChat = async () => {
     const newConv = await createConversation();
     navigate(`/app/chat/${newConv.id}`);
+    onClose?.();
   };
 
   return (
-    <div className="w-72 h-screen bg-neutral-950 text-white flex flex-col border-r border-neutral-800 overflow-hidden">
-      {/* Top */}
-      <div className="p-4 border-b border-neutral-800">
+    <div className="w-64 h-dvh bg-neutral-900 text-white flex flex-col md:border-r border-neutral-800">
+      <div className="p-4 border-b border-neutral-800 shrink-0 flex items-center">
+        {/* New Chat button */}
         <button
           onClick={handleNewChat}
-          className="w-full bg-neutral-900 hover:bg-neutral-800 active:scale-[0.98] transition py-2.5 rounded-lg text-base font-medium"
+          className="
+      w-full bg-neutral-800 hover:bg-neutral-700
+      active:scale-[0.98] transition
+      py-2.5 rounded-lg text-sm font-medium
+    "
         >
           + New Chat
+        </button>
+
+        {/* Close button (mobile only) */}
+        <button onClick={onClose} className="ml-2 md:hidden">
+          <X className="text-neutral-400 hover:text-white" />
         </button>
       </div>
 
       {/* Section header */}
-      <button className="flex items-center gap-2 px-4 pt-4 pb-2 text-base font-semibold text-neutral-400">
+      <button className="flex items-center gap-2 px-4 pt-4 pb-2 text-sm font-semibold text-neutral-400">
         Chat History
         <ChevronDown size={18} />
       </button>
@@ -49,23 +59,25 @@ const Sidebar = () => {
       </div>
 
       {/* Footer */}
-      <div className="border-t border-neutral-800 p-3 flex items-center justify-between gap-2 shrink-0">
+      <div className=" p-4 flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <UserButton />
-
-          <div className="text-base text-neutral-400 truncate">
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: {
+                  width: "35px",
+                  height: "35px",
+                },
+              },
+            }}
+          />
+          <div className="text-sm text-neutral-400 truncate">
             {user?.firstName || user?.primaryEmailAddress?.emailAddress}
           </div>
-        </div>
-
-        <div className="flex items-center gap-1 text-base text-green-400 whitespace-nowrap">
-          <span className="w-4 h-4 rounded-full bg-green-500" />
-          signed in
         </div>
       </div>
     </div>
   );
 };
-
 
 export default Sidebar;

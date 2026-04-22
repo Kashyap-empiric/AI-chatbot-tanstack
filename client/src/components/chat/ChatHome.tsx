@@ -14,8 +14,8 @@ const ChatHome = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center bg-[#212121] text-white px-4">
-      <div className="text-center max-w-md">
+    <div className="flex flex-1 items-center justify-center bg-[#212121] text-white px-4 overflow-hidden">
+      <div className="text-center max-w-md w-full">
         <h1 className="text-xl font-medium mb-2">
           No conversation selected
         </h1>

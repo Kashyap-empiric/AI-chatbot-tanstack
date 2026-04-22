@@ -72,7 +72,7 @@ const ConversationItem = ({ conversation }: Props) => {
     >
       {editing ? (
         <input
-          className="text-base bg-transparent outline-none text-neutral-200 w-full min-w-0"
+          className="text-sm bg-transparent outline-none text-neutral-200 w-full min-w-0"
           value={title}
           autoFocus
           onChange={(e) => setTitle(e.target.value)}
@@ -82,7 +82,7 @@ const ConversationItem = ({ conversation }: Props) => {
           }}
         />
       ) : (
-        <span className="text-base truncate text-neutral-200 min-w-0 flex-1">
+        <span className="text-sm truncate text-neutral-200 min-w-0 flex-1">
           {conversation.title}
         </span>
       )}
