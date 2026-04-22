@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { AIAdapter } from "./base.adapter";
+import { AIMessage, AIAdapter, AIStreamChunk } from "./base.adapter";
 
 const getClient = () => {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -9,14 +9,56 @@ const getClient = () => {
     return new GoogleGenAI({ apiKey });
 };
 
+const toGeminiMessages = (messages: AIMessage[]) => {
+    return messages.map((msg) => ({
+        role: msg.role,
+        parts: [{ text: msg.content }],
+    }));
+};
+
 export class GeminiAdapter implements AIAdapter {
     private client = getClient();
-    async generate({ model, contents }: { model: string, contents: any[]  }) {
+    async generate({
+        model,
+        messages,
+    }: {
+        model: string;
+        messages: AIMessage[];
+    }) {
         const response = await this.client.models.generateContent({
-            model, contents
+            model,
+            contents: toGeminiMessages(messages),
         });
         return {
-            text: response.text || "", modelVersion: response?.modelVersion
+            text: response.text || "",
+            modelVersion: response?.modelVersion,
+        };
+    }
+    async *stream({
+        model,
+        messages,
+    }: {
+        model: string;
+        messages: AIMessage[];
+    }): AsyncGenerator<AIStreamChunk> {
+        const stream = this.client.models.generateContentStream({
+            model,
+            contents: toGeminiMessages(messages),
+            config: { responseModalities: ['TEXT']}
+        });
+        let fullText = "";
+        for await (const chunk of stream) {
+            const text = chunk?.text || "";
+            if (!text) continue;
+            fullText += text;
+            yield {
+                text,
+                done: false,
+            };
+        }
+        yield {
+            text: "",
+            done: true
         }
     }
 }

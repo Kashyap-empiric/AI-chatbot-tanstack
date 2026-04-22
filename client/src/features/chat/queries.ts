@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchMessage, sendMessage } from "./api";
+import { fetchMessage, streamMessage } from "./api";
 import type { ApiMessage, Message } from "./types";
+
+type SendMessagePayload = {
+  conversationId: string;
+  content: string;
+};
 
 const mapMessage = (msg: ApiMessage): Message => ({
   id: msg._id ?? crypto.randomUUID(),
@@ -10,9 +15,8 @@ const mapMessage = (msg: ApiMessage): Message => ({
 });
 
 export const useMessages = (conversationId?: string) => {
-
   return useQuery({
-    queryKey: ["messages", conversationId],
+    queryKey: ["messages", String(conversationId)],
     queryFn: () => fetchMessage(conversationId!),
     enabled: !!conversationId,
     select: (data) => (Array.isArray(data) ? data.map(mapMessage) : []),
@@ -23,18 +27,15 @@ export const useMessages = (conversationId?: string) => {
 export const useSendMessage = () => {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: sendMessage,
+  return useMutation<void, Error, SendMessagePayload>({
+    mutationFn: async (vars) => vars,
 
     onMutate: async ({ conversationId, content }) => {
-      await queryClient.cancelQueries({
-        queryKey: ["messages", conversationId],
-      });
+      const key = ["messages", String(conversationId)];
 
-      const previousMessages = queryClient.getQueryData<Message[]>([
-        "messages",
-        conversationId,
-      ]);
+      await queryClient.cancelQueries({ queryKey: key });
+
+      const previousMessages = queryClient.getQueryData<Message[]>(key);
 
       const tempAssistantId = `temp-ai-${crypto.randomUUID()}`;
 
@@ -52,9 +53,37 @@ export const useSendMessage = () => {
         createdAt: new Date().toISOString(),
       };
 
-      queryClient.setQueryData<Message[]>(
-        ["messages", conversationId],
-        (old = []) => [...old, userMessage, assistantPlaceholder],
+      queryClient.setQueryData<Message[]>(key, (old = []) => [
+        ...old,
+        userMessage,
+        assistantPlaceholder,
+      ]);
+
+      let fullText = "";
+
+      streamMessage(
+        { conversationId, content },
+        (token) => {
+          fullText += token;
+
+          queryClient.setQueryData<Message[]>(key, (old = []) =>
+            old.map((m) =>
+              m.id === tempAssistantId
+                ? { ...m, content: fullText }
+                : m
+            )
+          );
+        },
+        () => {
+          // FINAL COMMIT (prevents UI stuck state)
+          queryClient.setQueryData<Message[]>(key, (old = []) =>
+            old.map((m) =>
+              m.id === tempAssistantId
+                ? { ...m, content: fullText }
+                : m
+            )
+          );
+        }
       );
 
       return {
@@ -64,23 +93,12 @@ export const useSendMessage = () => {
       };
     },
 
-    onSuccess: (data, _vars, context) => {
-      const serverMessages = data.messages.map(mapMessage);
-
-      queryClient.setQueryData<Message[]>(
-        ["messages", context.conversationId],
-        (old = []) => {
-          const filtered = old.filter((m) => m.id !== context.tempAssistantId);
-
-          return [...filtered, ...serverMessages.slice(-1)];
-        },
-      );
-    },
-
     onError: (_err, variables, context) => {
+      const key = ["messages", String(variables.conversationId)];
+
       queryClient.setQueryData(
-        ["messages", variables.conversationId],
-        context?.previousMessages || [],
+        key,
+        context?.previousMessages || []
       );
     },
   });

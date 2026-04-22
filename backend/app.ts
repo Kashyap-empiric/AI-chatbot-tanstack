@@ -14,7 +14,9 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
-app.use(clerkMiddleware())
+app.use(clerkMiddleware());
+app.disable("etag");
+
 app.use("/api/conversation", protect, conversationRoutes);
 app.use('/api/chat', protect, chatRoutes);
 

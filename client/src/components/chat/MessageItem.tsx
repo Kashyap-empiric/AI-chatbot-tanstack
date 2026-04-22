@@ -2,33 +2,12 @@ import type { Message } from "../../features/chat/types";
 import Markdown from "./Markdown";
 import TypingIndicator from "./TypingIndicator";
 
-// const Avatar = ({ role }: { role: string }) => {
-//   return (
-//     <div
-//       className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 border border-neutral-700 ${
-//         role === "user"
-//           ? "bg-blue-600 text-white"
-//           : "bg-neutral-800 text-neutral-200"
-//       }`}
-//     >
-//       {role === "user" ? "U" : "AI"}
-//     </div>
-//   );
-// };
-
-const MessageItem = ({
-  message,
-  isTyping,
-}: {
-  message: Message;
-  isTyping: boolean;
-}) => {
+const MessageItem = ({ message }: { message: Message }) => {
   const isUser = message.role === "user";
 
   return (
     <div className="w-full flex justify-center">
       <div className="w-full max-w-screen-lg flex gap-2 md:gap-3 py-2 md:py-3">
-        {/* {!isUser && <Avatar role="model" />} */}
 
         <div
           className={`flex flex-col w-full ${
@@ -46,14 +25,15 @@ const MessageItem = ({
             </div>
           ) : (
             <div className="w-full text-sm md:text-base leading-6 md:leading-7 text-neutral-100 break-words">
-              <Markdown content={message.content} />
+              {message.content ? (
+                <Markdown content={message.content} />
+              ) : (
+                <TypingIndicator />
+              )}
             </div>
           )}
-
-          {!isUser && isTyping && <TypingIndicator />}
         </div>
 
-        {/* {isUser && <Avatar role="user" />} */}
       </div>
     </div>
   );
