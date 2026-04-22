@@ -1,16 +1,14 @@
-import { useConversationStore } from "../../features/conversation/store";
+import { useNavigate } from "react-router-dom";
 import { useCreateConversation } from "../../features/conversation/queries";
 
 const ChatHome = () => {
-  const setActiveConversation = useConversationStore(
-    (state) => state.setActiveConversation
-  );
+  const navigate = useNavigate();
 
   const { mutateAsync: createConversation } = useCreateConversation();
 
   const handleNewChat = async () => {
     const newConv = await createConversation();
-    setActiveConversation(newConv.id);
+    navigate(`/app/chat/${newConv.id}`);
   };
 
   return (

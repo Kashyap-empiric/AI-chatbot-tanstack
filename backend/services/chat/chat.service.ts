@@ -6,6 +6,8 @@ import { toMessageDTO } from "../../utils/dto";
 import { AIMessage, AIStreamChunk } from "../../adapters/base.adapter";
 import { getAdapter } from "../../adapters/ai.adapter";
 
+import { selectModel } from "../ai/routing.service";
+
 type ChatInput = {
     userId: string;
     conversationId: string;
@@ -17,8 +19,9 @@ export const chatService = async function* ({
     userId,
     conversationId,
     content,
-    model = "gemini",
+    model,
 }: ChatInput) {
+    const selectedModel = selectModel(model);
     const conversation = await Conversation.findOne({
         _id: conversationId,
         userId,
@@ -54,12 +57,12 @@ export const chatService = async function* ({
     const recentMessages = await getRecentMessages(conversationId);
     const messages: AIMessage[] = buildContext(recentMessages);
 
-    const adaptor = getAdapter(model as any);
+    const adaptor = getAdapter(selectedModel as any);
 
     let fullText = "";
 
     const stream = adaptor.stream({
-        model,
+        model: selectedModel,
         messages,
     });
 
@@ -72,11 +75,10 @@ export const chatService = async function* ({
     }
 
     const modelMsg = await Message.create({
-        userId,
         conversationId,
         role: "model",
         content: fullText,
-        status: "success",
+        status: "sent",
     } as any );
     await Conversation.findByIdAndUpdate(conversationId, {
         lastMessageAt: new Date(),
@@ -87,7 +89,7 @@ export const chatService = async function* ({
         text: "",
         metadata: {
             messageId: modelMsg._id,
-            model
+            model: selectedModel
         }
     }
 };

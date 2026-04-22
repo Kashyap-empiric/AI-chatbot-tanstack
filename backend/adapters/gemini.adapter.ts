@@ -11,7 +11,7 @@ const getClient = () => {
 
 const toGeminiMessages = (messages: AIMessage[]) => {
     return messages.map((msg) => ({
-        role: msg.role,
+        role: msg.role === "assistant" ? "model" : msg.role,
         parts: [{ text: msg.content }],
     }));
 };
@@ -41,7 +41,7 @@ export class GeminiAdapter implements AIAdapter {
         model: string;
         messages: AIMessage[];
     }): AsyncGenerator<AIStreamChunk> {
-        const stream = this.client.models.generateContentStream({
+        const stream = await this.client.models.generateContentStream({
             model,
             contents: toGeminiMessages(messages),
             config: { responseModalities: ['TEXT']}
