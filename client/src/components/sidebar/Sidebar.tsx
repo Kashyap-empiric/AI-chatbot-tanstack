@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import ConversationItem from "./ConversationItem";
 import { ChevronDown, X } from "lucide-react";
 import {
@@ -13,6 +14,7 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
 
   const { data: conversations = [], isLoading } = useConversations();
   const { mutateAsync: createConversation } = useCreateConversation();
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
 
   const handleNewChat = async () => {
     const newConv = await createConversation();
@@ -42,19 +44,35 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
       </div>
 
       {/* Section header */}
-      <button className="flex items-center gap-2 px-4 pt-4 pb-2 text-sm font-semibold text-neutral-400">
+      <button
+        onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+        className="flex items-center gap-2 px-4 pt-4 pb-2 text-sm font-semibold text-neutral-400 hover:text-white transition-colors w-full"
+      >
         Chat History
-        <ChevronDown size={18} />
+        <ChevronDown
+          size={18}
+          className={`transition-transform duration-200 ${
+            isHistoryExpanded ? "" : "-rotate-90"
+          }`}
+        />
       </button>
 
       {/* Conversations */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
-        {isLoading ? (
-          <div className="p-4 text-neutral-400">Loading...</div>
-        ) : (
-          conversations.map((conv) => (
-            <ConversationItem key={conv.id} conversation={conv} />
-          ))
+      <div
+        className={`flex-1 overflow-y-auto p-2 space-y-1 min-h-0 transition-all duration-300 ${
+          isHistoryExpanded ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        {isHistoryExpanded && (
+          <>
+            {isLoading ? (
+              <div className="p-4 text-neutral-400">Loading...</div>
+            ) : (
+              conversations.map((conv) => (
+                <ConversationItem key={conv.id} conversation={conv} />
+              ))
+            )}
+          </>
         )}
       </div>
 

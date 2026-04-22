@@ -39,11 +39,11 @@ export const streamMessage = async (
     buffer = lines.pop() || "";
 
     for (const line of lines) {
-      if (line.trim()) continue;
+      if (!line.trim()) continue;
 
       console.log("RAW CHUNK:", line);
-const chunk = JSON.parse(line);
-console.log("PARSED CHUNK:", chunk);
+      const chunk = JSON.parse(line);
+      console.log("PARSED CHUNK:", chunk);
 
 
       if (chunk.type === "token") {
