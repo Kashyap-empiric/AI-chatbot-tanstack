@@ -118,6 +118,36 @@ const components = {
       </table>
     </div>
   ),
+
+  thead: ({ children }: any) => (
+    <thead className="bg-neutral-900 border-b border-neutral-800">
+      {children}
+    </thead>
+  ),
+
+  tbody: ({ children }: any) => (
+    <tbody className="divide-y divide-neutral-800">
+      {children}
+    </tbody>
+  ),
+
+  th: ({ children }: any) => (
+    <th className="px-4 py-3 text-left font-semibold text-neutral-200 border-r border-neutral-800 last:border-0">
+      {children}
+    </th>
+  ),
+
+  td: ({ children }: any) => (
+    <td className="px-4 py-3 border-t border-r border-neutral-800 text-neutral-300 last:border-0">
+      {children}
+    </td>
+  ),
+
+  tr: ({ children }: any) => (
+    <tr className="hover:bg-neutral-900/50 transition-colors">
+      {children}
+    </tr>
+  ),
 };
 
 export default function Markdown({ content }: { content: string }) {

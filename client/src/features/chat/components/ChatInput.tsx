@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useChatStore } from "../../../app/store/chatStore";
 import { useStreaming } from "../hooks/useStreaming";
@@ -11,7 +11,8 @@ const ChatInput = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { id: conversationId } = useParams();
-  const { startStreaming } = useStreaming();
+  const { startStreaming, stopStreaming } = useStreaming();
+
   const isStreaming = useChatStore((state) => state.isStreaming);
 
   useEffect(() => {
@@ -32,6 +33,11 @@ const ChatInput = () => {
       content: trimmed,
       model,
     });
+  };
+
+  const handleStop = () => {
+    if (!conversationId) return;
+    stopStreaming(conversationId);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -91,10 +97,16 @@ const ChatInput = () => {
             </div>
           </div>
 
-          {/* SEND BUTTON */}
+          {/* ACTION BUTTON */}
           <button
-            onClick={() => void handleSend()}
-            disabled={!input.trim() || isStreaming}
+            onClick={() => {
+              if (isStreaming) {
+                handleStop();
+              } else {
+                void handleSend();
+              }
+            }}
+            disabled={!input.trim() && !isStreaming}
             className="
               absolute right-3 bottom-[10px]
               p-2
@@ -104,7 +116,11 @@ const ChatInput = () => {
               z-20
             "
           >
-            <ArrowUp className="w-5 h-5" />
+            {isStreaming ? (
+              <Square className="w-5 h-5" />
+            ) : (
+              <ArrowUp className="w-5 h-5" />
+            )}
           </button>
         </div>
 

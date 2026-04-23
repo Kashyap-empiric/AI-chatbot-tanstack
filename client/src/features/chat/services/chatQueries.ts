@@ -13,7 +13,7 @@ export const useMessages = (conversationId?: string) => {
     return useQuery({
         queryKey: ["messages", conversationId],
         queryFn: () => fetchMessage(conversationId!),
-        enabled: !!conversationId,
+        enabled: !!conversationId && conversationId !== "new",
         select: (data) => (Array.isArray(data) ? data.map(mapMessage) : []),
         staleTime: 10_000,
     });

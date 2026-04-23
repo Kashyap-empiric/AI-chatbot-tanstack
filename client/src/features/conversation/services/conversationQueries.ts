@@ -60,3 +60,11 @@ export const useUpdateConversationTitle = () => {
     },
   });
 };
+export const useConversationActions = () => {
+  const queryClient = useQueryClient();
+
+  return {
+    invalidateConversations: () =>
+      queryClient.invalidateQueries({ queryKey: conversationsKey }),
+  };
+};

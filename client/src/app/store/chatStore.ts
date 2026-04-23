@@ -4,10 +4,17 @@ import type { Message } from "../../features/chat/types";
 type ChatState = {
   activeConversationId: string | null;
   messages: Message[];
+
   streamingId: string | null;
   isStreaming: boolean;
 
+  // NEW: allows external cancel coordination
+  stopRequested: boolean;
+  uiActiveId: string | null;
+
   setActiveConversation: (id: string | null) => void;
+  updateActiveConversationId: (id: string) => void;
+  setUiActiveId: (id: string | null) => void;
   reset: () => void;
   setMessages: (messages: Message[]) => void;
 
@@ -18,6 +25,10 @@ type ChatState = {
   setMessageContent: (id: string, content: string) => void;
 
   finalizeMessage: () => void;
+
+  // NEW: explicit stop signal
+  requestStop: () => void;
+  clearStop: () => void;
 };
 
 const initialState = {
@@ -25,6 +36,7 @@ const initialState = {
   messages: [],
   streamingId: null,
   isStreaming: false,
+  stopRequested: false,
 };
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -33,17 +45,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setActiveConversation: (id) => {
     set({
       activeConversationId: id,
+      uiActiveId: id,
       messages: [],
       streamingId: null,
       isStreaming: false,
+      stopRequested: false,
     });
   },
+
+  setUiActiveId: (id) => {
+    set({ uiActiveId: id });
+  },
+
+  updateActiveConversationId: (id) => {
+    set({ activeConversationId: id });
+  },
+
 
   reset: () => {
     set({
       messages: [],
       streamingId: null,
       isStreaming: false,
+      stopRequested: false,
     });
   },
 
@@ -79,26 +103,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [...s.messages, msg],
       streamingId: id,
       isStreaming: true,
+      stopRequested: false,
     }));
 
     return id;
   },
 
   appendToken: (id, token) => {
-    const { streamingId, messages } = get();
+    const { streamingId, stopRequested } = get();
 
-    if (streamingId !== id) return;
+    // CRITICAL: stop blocks all incoming tokens
+    if (stopRequested || streamingId !== id) return;
 
-    // IMPORTANT: avoid recreating entire string per render spike
-    const updated = messages.map((m) => {
-      if (m.id !== id) return m;
-      return {
-        ...m,
-        content: m.content + token,
-      };
-    });
-
-    set({ messages: updated });
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === id
+          ? { ...m, content: m.content + token }
+          : m
+      ),
+    }));
   },
 
   setMessageContent: (id, content) => {
@@ -115,11 +138,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => ({
       isStreaming: false,
       streamingId: null,
+      stopRequested: false,
       messages: s.messages.map((m) =>
         m.id === streamingId
           ? { ...m, isStreaming: false }
           : m
       ),
     }));
+  },
+
+  requestStop: () => {
+    set({
+      stopRequested: true,
+      isStreaming: false,
+    });
+  },
+
+  clearStop: () => {
+    set({
+      stopRequested: false,
+    });
   },
 }));

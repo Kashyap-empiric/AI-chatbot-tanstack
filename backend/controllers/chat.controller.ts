@@ -6,11 +6,13 @@ import {
     createChatStreamSession,
 } from "../services/chat/stream-session.service";
 import { paceTextStream } from "../services/chat/stream-pacing.service";
+import Message from "../models/Message";
+import Conversation from "../models/Conversation";
 
 const writeSseEvent = (
     res: Response,
     event: string,
-    data: Record<string, unknown>
+    data: Record<string, unknown>,
 ) => {
     res.write(`event: ${event}\n`);
     res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -23,12 +25,23 @@ const writeSseEvent = (
 
 export const createChatStream = async (req: Request, res: Response) => {
     const { userId } = getAuth(req);
-    const { conversationId, content, model } = req.body;
+    let { conversationId, content, model } = req.body;
 
-    if (!conversationId || !content) {
+    if (!content) {
         return res.status(400).json({
-            error: "conversationId and content are required",
+            error: "message is required",
         });
+    }
+
+    // LATE-CREATION: If ID is "new" or missing, create the conversation now
+    if (!conversationId || conversationId === "new") {
+        const title =
+            content.length > 30 ? `${content.slice(0, 30)}...` : content;
+        const convo = await Conversation.create({
+            userId: userId!,
+            title,
+        });
+        conversationId = convo._id.toString();
     }
 
     const session = createChatStreamSession({
@@ -40,6 +53,7 @@ export const createChatStream = async (req: Request, res: Response) => {
 
     return res.status(201).json({
         streamId: session.id,
+        conversationId,
     });
 };
 
@@ -56,34 +70,35 @@ export const streamChat = async (req: Request, res: Response) => {
         });
     }
 
+    let assistantContent = "";
+    let userMsg: any = null;
+    let streamFinished = false;
+
     try {
         console.log("[chat.controller]", {
             phase: "stream_connected",
             conversationId: session.conversationId,
-            modelId: session.model || "default",
         });
 
-        /**
-         * SSE-only protocol (finalized)
-         */
+        // 1. Pre-save User Message (so it's not lost)
+        userMsg = await Message.create({
+            conversationId: session.conversationId,
+            role: "user",
+            content: session.content,
+        });
+
         res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
         res.setHeader("Cache-Control", "no-cache, no-transform");
         res.setHeader("Connection", "keep-alive");
         res.setHeader("X-Accel-Buffering", "no");
-
         res.flushHeaders?.();
 
-        /**
-         * Stream start event
-         */
         writeSseEvent(res, "start", {
             conversationId: session.conversationId,
             model: session.model || "default",
+            userMessageId: userMsg._id,
         });
 
-        /**
-         * Pure generation layer → pacing layer → SSE
-         */
         const stream = chatService({
             userId: session.userId,
             conversationId: session.conversationId,
@@ -93,9 +108,8 @@ export const streamChat = async (req: Request, res: Response) => {
 
         for await (const chunk of paceTextStream(stream)) {
             if (chunk.type === "delta") {
-                writeSseEvent(res, "delta", {
-                    text: chunk.text,
-                });
+                assistantContent += chunk.text;
+                writeSseEvent(res, "delta", { text: chunk.text });
                 continue;
             }
 
@@ -103,32 +117,50 @@ export const streamChat = async (req: Request, res: Response) => {
                 writeSseEvent(res, "complete", {
                     metadata: chunk.metadata || null,
                 });
+                streamFinished = true;
             }
         }
-
-        console.log("[chat.controller]", {
-            phase: "stream_completed",
-            conversationId: session.conversationId,
-            elapsedMs: Date.now() - startedAt,
-        });
-
-        res.end();
     } catch (error: any) {
         const message = error?.message || "Internal Server Error";
-
         console.error("[chat.controller] error", {
-            conversationId: session.conversationId,
+            conversationId: session?.conversationId,
             error: message,
-            elapsedMs: Date.now() - startedAt,
         });
 
         if (!res.headersSent) {
             res.status(500).json({ error: message });
         } else {
-            writeSseEvent(res, "error", {
-                error: message,
-            });
-            res.end();
+            writeSseEvent(res, "error", { error: message });
         }
+    } finally {
+        // 2. Finalize: Save Assistant Message if we have content
+        if (userMsg && assistantContent) {
+            try {
+                await Message.create({
+                    conversationId: session.conversationId,
+                    role: "assistant",
+                    content: assistantContent,
+                    parentMessageId: userMsg._id,
+                });
+
+                await Conversation.findByIdAndUpdate(session.conversationId, {
+                    $set: { lastMessageAt: new Date() },
+                    $inc: { messageCount: 2 },
+                });
+
+                console.log("[chat.controller] saved assistant response", {
+                    conversationId: session.conversationId,
+                    charCount: assistantContent.length,
+                    isComplete: streamFinished,
+                });
+            } catch (saveErr) {
+                console.error(
+                    "[chat.controller] failed to save assistant message",
+                    saveErr,
+                );
+            }
+        }
+
+        res.end();
     }
 };

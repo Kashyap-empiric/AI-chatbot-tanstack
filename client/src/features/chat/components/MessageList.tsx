@@ -12,30 +12,40 @@ const MessageList = () => {
 
   const messages = useChatStore((state) => state.messages);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
+
   const isStreaming = useChatStore((state) => state.isStreaming);
+  const streamingId = useChatStore((state) => state.streamingId);
+  const stopRequested = useChatStore((state) => state.stopRequested);
 
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
   const setMessages = useChatStore((state) => state.setMessages);
 
-  const { data: fetchedMessages = [], isLoading } = useMessages(conversationId);
+  const { data: fetchedMessages = [], isLoading } =
+    useMessages(conversationId);
 
   /**
    * Set active conversation ONLY
    */
   useEffect(() => {
+    // Prevent clearing messages if the store ID already matches the URL ID
+    if (activeConversationId === (conversationId ?? null)) {
+      return;
+    }
+
     hydratedConversationRef.current = null;
     setActiveConversation(conversationId ?? null);
-  }, [conversationId, setActiveConversation]);
+  }, [conversationId, setActiveConversation, activeConversationId]);
 
   /**
-   * Hydration effect (FIXED: removed isStreaming dependency)
+   * Hydration (safe against streaming race conditions)
    */
   useEffect(() => {
     if (
       !conversationId ||
       isLoading ||
       activeConversationId !== conversationId ||
-      hydratedConversationRef.current === conversationId
+      hydratedConversationRef.current === conversationId ||
+      streamingId
     ) {
       return;
     }
@@ -48,20 +58,21 @@ const MessageList = () => {
     fetchedMessages,
     isLoading,
     setMessages,
+    streamingId,
   ]);
 
   /**
-   * Scroll management (frame-safe behavior)
+   * Scroll management (stop + streaming safe)
    */
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       bottomRef.current?.scrollIntoView({
-        behavior: isStreaming ? "auto" : "smooth",
+        behavior: isStreaming || stopRequested ? "auto" : "smooth",
       });
     });
 
     return () => cancelAnimationFrame(id);
-  }, [messages, isStreaming]);
+  }, [messages, isStreaming, stopRequested]);
 
   if (!conversationId) {
     return (

@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 import ConversationItem from "./ConversationItem";
 import {
   useConversations,
-  useCreateConversation,
 } from "../services/conversationQueries";
 
 const Sidebar = ({ onClose }: { onClose?: () => void }) => {
@@ -13,12 +12,10 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   const { user } = useUser();
 
   const { data: conversations = [], isLoading } = useConversations();
-  const { mutateAsync: createConversation } = useCreateConversation();
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
 
-  const handleNewChat = async () => {
-    const newConv = await createConversation();
-    navigate(`/app/chat/${newConv.id}`);
+  const handleNewChat = () => {
+    navigate(`/app/chat/new`);
     onClose?.();
   };
 
