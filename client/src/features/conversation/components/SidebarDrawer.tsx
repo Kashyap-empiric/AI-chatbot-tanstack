@@ -8,7 +8,6 @@ interface Props {
 const SidebarDrawer = ({ open, onClose }: Props) => {
   return (
     <>
-      {/* Overlay */}
       <div
         onClick={onClose}
         className={`
@@ -17,7 +16,6 @@ const SidebarDrawer = ({ open, onClose }: Props) => {
         `}
       />
 
-      {/* Drawer */}
       <div
         className={`
           fixed top-0 left-0 h-dvh w-64 bg-neutral-900

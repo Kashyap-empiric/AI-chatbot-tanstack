@@ -1,11 +1,7 @@
-import Conversation from "../../models/Conversation";
-import Message from "../../models/Message";
 import { buildContext } from "./context.service";
 import { getRecentMessages } from "./memory.service";
-import { toMessageDTO } from "../../utils/dto";
-import { AIMessage, AIStreamChunk } from "../../adapters/base.adapter";
+import { AIMessage } from "../../adapters/base.adapter";
 import { getAdapter } from "../../adapters/ai.adapter";
-
 import { selectModel } from "../ai/routing.service";
 
 type ChatInput = {
@@ -22,74 +18,56 @@ export const chatService = async function* ({
     model,
 }: ChatInput) {
     const selectedModel = selectModel(model);
-    const conversation = await Conversation.findOne({
-        _id: conversationId,
-        userId,
-    } as any );
-    if (!conversation) {
-        throw new Error("Conversation not found");
-    }
 
-    const userMsg = await Message.create({
-        userId,
+    console.log("[chat.service]", {
+        phase: "stream_start",
         conversationId,
-        role: "user",
-        content,
-        status: "sent",
-    } as any );
+        provider: selectedModel.provider,
+        model: selectedModel.model,
+    });
 
-    yield {
-        type: "meta",
-        text: "user_message_saved"
-    }
-
-    await Conversation.findByIdAndUpdate(conversationId, {
-        lastMessageAt: new Date(),
-        $inc: { messageCount: 1 },
-    } as any);
-
-    if (conversation.title === "New Conversation") {
-        const newTitle = content.trim().slice(0, 25);
-        conversation.title = newTitle || "New Conversation";
-        await conversation.save();
-    }
+    /**
+     * IMPORTANT:
+     * No DB writes here.
+     * No side effects.
+     * This layer is pure generation only.
+     */
 
     const recentMessages = await getRecentMessages(conversationId);
     const messages: AIMessage[] = buildContext(recentMessages);
 
-    const adaptor = getAdapter(selectedModel as any);
+    const adapter = getAdapter(selectedModel.provider);
 
-    let fullText = "";
-
-    const stream = adaptor.stream({
-        model: selectedModel,
+    const stream = adapter.stream({
+        model: selectedModel.model,
         messages,
     });
 
-    for await (const chunk of stream) {
-        fullText += chunk.text;
-        yield {
-            type: "token",
-            text: chunk.text
-        };
+    try {
+        for await (const chunk of stream) {
+            const text = chunk?.text || "";
+
+            if (!text) continue;
+
+            // PURE PASS-THROUGH STREAM
+            yield {
+                type: "token",
+                text,
+            };
+        }
+    } catch (error) {
+        console.error("[chat.service] stream error", {
+            conversationId,
+            provider: selectedModel.provider,
+            model: selectedModel.model,
+            error: error instanceof Error ? error.message : error,
+        });
+
+        throw error;
     }
 
-    const modelMsg = await Message.create({
+    console.log("[chat.service]", {
+        phase: "stream_end",
         conversationId,
-        role: "model",
-        content: fullText,
-        status: "sent",
-    } as any );
-    await Conversation.findByIdAndUpdate(conversationId, {
-        lastMessageAt: new Date(),
-        $inc: { messageCount: 1 },
-    } as any);
-    yield {
-        type: "done",
-        text: "",
-        metadata: {
-            messageId: modelMsg._id,
-            model: selectedModel
-        }
-    }
+    });
 };

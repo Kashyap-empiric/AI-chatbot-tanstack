@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
-import type { Conversation } from "../../features/conversation/types";
+import { useNavigate, useParams } from "react-router-dom";
+import type { Conversation } from "../types";
 import {
   useDeleteConversation,
   useUpdateConversationTitle,
-} from "../../features/conversation/queries";
-import { useParams, useNavigate } from "react-router-dom";
+} from "../services/conversationQueries";
 
 interface Props {
   conversation: Conversation;
@@ -14,7 +14,6 @@ interface Props {
 const ConversationItem = ({ conversation }: Props) => {
   const navigate = useNavigate();
   const { id: activeConversationId } = useParams();
-
   const { mutateAsync: deleteConversation } = useDeleteConversation();
   const { mutateAsync: updateConversationTitle } = useUpdateConversationTitle();
 
@@ -22,6 +21,10 @@ const ConversationItem = ({ conversation }: Props) => {
   const [title, setTitle] = useState(conversation.title);
 
   const isActive = activeConversationId === conversation.id;
+
+  useEffect(() => {
+    setTitle(conversation.title);
+  }, [conversation.title]);
 
   const handleSelect = () => {
     if (!editing) {
@@ -32,12 +35,10 @@ const ConversationItem = ({ conversation }: Props) => {
   const handleDelete = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
 
-    const wasActive = isActive;
-
     await deleteConversation(conversation.id);
 
-    if (wasActive) {
-      navigate("/app");
+    if (isActive) {
+      navigate("/app/chat");
     }
   };
 
@@ -45,7 +46,6 @@ const ConversationItem = ({ conversation }: Props) => {
     setEditing(false);
 
     const trimmed = title.trim();
-
     if (!trimmed) {
       setTitle(conversation.title);
       return;
@@ -76,9 +76,11 @@ const ConversationItem = ({ conversation }: Props) => {
           value={title}
           autoFocus
           onChange={(e) => setTitle(e.target.value)}
-          onBlur={handleSave}
+          onBlur={() => void handleSave()}
           onKeyDown={(e) => {
-            if (e.key === "Enter") handleSave();
+            if (e.key === "Enter") {
+              void handleSave();
+            }
           }}
         />
       ) : (
@@ -105,7 +107,7 @@ const ConversationItem = ({ conversation }: Props) => {
         )}
 
         <button
-          onClick={handleDelete}
+          onClick={(e) => void handleDelete(e)}
           className="
             opacity-0 group-hover:opacity-100
             text-neutral-500 hover:text-red-400
@@ -118,6 +120,5 @@ const ConversationItem = ({ conversation }: Props) => {
     </div>
   );
 };
-
 
 export default ConversationItem;

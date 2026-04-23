@@ -18,6 +18,7 @@ const toGeminiMessages = (messages: AIMessage[]) => {
 
 export class GeminiAdapter implements AIAdapter {
     private client = getClient();
+
     async generate({
         model,
         messages,
@@ -29,11 +30,13 @@ export class GeminiAdapter implements AIAdapter {
             model,
             contents: toGeminiMessages(messages),
         });
+
         return {
             text: response.text || "",
             modelVersion: response?.modelVersion,
         };
     }
+
     async *stream({
         model,
         messages,
@@ -44,21 +47,27 @@ export class GeminiAdapter implements AIAdapter {
         const stream = await this.client.models.generateContentStream({
             model,
             contents: toGeminiMessages(messages),
-            config: { responseModalities: ['TEXT']}
+            config: { responseModalities: ["TEXT"] },
         });
+
         let fullText = "";
+
         for await (const chunk of stream) {
             const text = chunk?.text || "";
             if (!text) continue;
+
             fullText += text;
             yield {
                 text,
                 done: false,
             };
         }
+
+        console.log("STREAM FINISHED, total length:", fullText.length);
+
         yield {
             text: "",
-            done: true
-        }
+            done: true,
+        };
     }
 }

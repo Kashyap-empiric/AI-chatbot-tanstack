@@ -1,9 +1,11 @@
-import type { Message } from "../../features/chat/types";
-import Markdown from "./Markdown";
-import TypingIndicator from "./TypingIndicator";
+import type { Message } from "../types";
+import Markdown from "./Markdown.tsx";
+import TypingIndicator from "./ui/TypingIndicator.tsx";
 
 const MessageItem = ({ message }: { message: Message }) => {
   const isUser = message.role === "user";
+  const isStreaming = Boolean(message.isStreaming);
+  const hasContent = Boolean(message.content?.length);
 
   return (
     <div className="w-full flex justify-center">
@@ -25,11 +27,27 @@ const MessageItem = ({ message }: { message: Message }) => {
             </div>
           ) : (
             <div className="w-full text-sm md:text-base leading-6 md:leading-7 text-neutral-100 break-words">
-              {message.content ? (
-                <Markdown content={message.content} />
-              ) : (
+
+              {/* STREAM STATE */}
+              {!hasContent && isStreaming && (
                 <TypingIndicator />
               )}
+
+              {/* STREAMING RENDER (lightweight) */}
+              {isStreaming && hasContent && (
+                <div className="whitespace-pre-wrap">
+                  {message.content}
+                  <span className="ml-1 inline-block animate-pulse text-neutral-300">
+                    ▍
+                  </span>
+                </div>
+              )}
+
+              {/* FINAL RENDER (stable DOM, no layout shift) */}
+              {!isStreaming && hasContent && (
+                <Markdown content={message.content} />
+              )}
+
             </div>
           )}
         </div>

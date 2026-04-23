@@ -5,6 +5,7 @@ export type Message = {
   role: Role;
   content: string;
   createdAt: string;
+  isStreaming?: boolean;
 };
 
 export interface ApiMessage {

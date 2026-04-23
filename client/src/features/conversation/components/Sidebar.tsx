@@ -1,12 +1,12 @@
-import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import ConversationItem from "./ConversationItem";
+import { UserButton, useUser } from "@clerk/react";
 import { ChevronDown, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import ConversationItem from "./ConversationItem";
 import {
   useConversations,
   useCreateConversation,
-} from "../../features/conversation/queries";
-import { UserButton, useUser } from "@clerk/react";
+} from "../services/conversationQueries";
 
 const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   const navigate = useNavigate();
@@ -25,7 +25,6 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   return (
     <div className="w-64 h-dvh bg-neutral-900 text-white flex flex-col md:border-r border-neutral-800">
       <div className="p-4 border-b border-neutral-800 shrink-0 flex items-center">
-        {/* New Chat button */}
         <button
           onClick={handleNewChat}
           className="
@@ -37,13 +36,11 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
           + New Chat
         </button>
 
-        {/* Close button (mobile only) */}
         <button onClick={onClose} className="ml-2 md:hidden">
           <X className="text-neutral-400 hover:text-white" />
         </button>
       </div>
 
-      {/* Section header */}
       <button
         onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
         className="flex items-center gap-2 px-4 pt-4 pb-2 text-sm font-semibold text-neutral-400 hover:text-white transition-colors w-full"
@@ -57,7 +54,6 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
         />
       </button>
 
-      {/* Conversations */}
       <div
         className={`flex-1 overflow-y-auto p-2 space-y-1 min-h-0 transition-all duration-300 ${
           isHistoryExpanded ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -76,7 +72,6 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
         )}
       </div>
 
-      {/* Footer */}
       <div className=" p-4 flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <UserButton

@@ -1,8 +1,12 @@
 import express from "express";
-import { chat } from '../controllers/chat.controller.ts'
+import {
+    createChatStream,
+    streamChat,
+} from "../controllers/chat.controller.ts";
 
 const router = express.Router();
 
-router.post('/', chat);
+router.post("/", createChatStream);
+router.get("/stream/:streamId", streamChat);
 
 export default router;

@@ -1,11 +1,11 @@
 import { useParams } from "react-router-dom";
 import { Menu } from "lucide-react";
-import MessageList from "./MessageList";
-import ChatInput from "./ChatInput";
-import ChatHome from "./ChatHome";
 import { useState } from "react";
-import SidebarDrawer from "../sidebar/SidebarDrawer";
-import { useConversations } from "../../features/conversation/queries";
+import SidebarDrawer from "../../conversation/components/SidebarDrawer";
+import { useConversations } from "../../conversation/services/conversationQueries";
+import ChatHome from "./ChatHome.tsx";
+import ChatInput from "./ChatInput";
+import MessageList from "./MessageList";
 
 const ChatWindow = () => {
   const { id } = useParams();
