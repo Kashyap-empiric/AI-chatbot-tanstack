@@ -15,6 +15,8 @@ type ActiveStream = {
     rafId: number | null;
     buffer: string;
     stop: (() => void) | null;
+    finished: boolean;
+    isAborted?: boolean;
 };
 
 export const useStreaming = () => {
@@ -40,17 +42,14 @@ export const useStreaming = () => {
         const isNew = conversationId === "new";
 
         store.appendUserMessage(content);
-
         const assistantId = store.appendAssistantMessage();
-
-        let buffer = "";
-        let rafId: number | null = null;
 
         const streamState: ActiveStream = {
             assistantId,
-            rafId,
-            buffer,
+            rafId: null,
+            buffer: "",
             stop: null,
+            finished: false,
         };
 
         streamsRef.current.set(conversationId, streamState);
@@ -59,11 +58,9 @@ export const useStreaming = () => {
             const current = streamsRef.current.get(targetId);
             const state = useChatStore.getState();
 
-            if (!current) return;
-            if (!current.buffer) return;
+            if (!current || !current.buffer) return;
 
-            // If we've navigated to a new ID, we should still flush to the assistantId we created
-            state.appendToken(assistantId, current.buffer);
+            state.appendToken(current.assistantId, current.buffer);
             current.buffer = "";
         };
 
@@ -73,7 +70,6 @@ export const useStreaming = () => {
                 if (!current || !streamsRef.current.has(targetId)) return;
 
                 flush(targetId);
-
                 current.rafId = requestAnimationFrame(loop);
             };
 
@@ -83,14 +79,26 @@ export const useStreaming = () => {
             current.rafId = requestAnimationFrame(loop);
         };
 
-        const stopStream = (targetId: string) => {
+        /**
+         * CRITICAL FIXES:
+         * - never call backend stop after stream is done
+         * - avoid double stop
+         * - always flush buffer before finalize
+         */
+        const stopStream = (targetId: string, callBackend = true) => {
             const current = streamsRef.current.get(targetId);
             if (!current) return;
 
-            if (current.stop) {
-                current.stop();
-                current.stop = null;
+            // prevent duplicate stop
+            if (current.finished && callBackend) {
+                callBackend = false;
             }
+
+            if (callBackend && current.stop) {
+                current.stop(); // backend abort
+            }
+
+            current.stop = null;
 
             if (current.rafId) {
                 cancelAnimationFrame(current.rafId);
@@ -100,38 +108,104 @@ export const useStreaming = () => {
             const state = useChatStore.getState();
 
             if (current.buffer) {
-                state.appendToken(assistantId, current.buffer);
+                state.appendToken(current.assistantId, current.buffer);
                 current.buffer = "";
             }
 
-            state.finalizeMessage();
-
+            state.finalizeMessage(false);
             streamsRef.current.delete(targetId);
         };
 
         try {
             const { promise, stop } = streamMessage(
                 { conversationId, content, model },
-                (token: string) => {
+
+                (event: any) => {
                     const current = streamsRef.current.get(conversationId);
                     if (!current) return;
 
-                    current.buffer += token;
+                    switch (event.type) {
+                        case "delta": {
+                            if (!event.text) return;
 
-                    if (!current.rafId) {
-                        startFrameLoop(conversationId);
+                            current.buffer += event.text;
+
+                            if (!current.rafId) {
+                                startFrameLoop(conversationId);
+                            }
+                            break;
+                        }
+
+                        case "meta": {
+                            if (event.conversationId) {
+                                invalidateConversations();
+
+                                if (isNew) {
+                                    useChatStore
+                                        .getState()
+                                        .setUiActiveId(event.conversationId);
+
+                                    window.history.replaceState(
+                                        null,
+                                        "",
+                                        `/app/chat/${event.conversationId}`,
+                                    );
+                                }
+                            }
+                            break;
+                        }
+
+                        case "done": {
+                            current.finished = true;
+
+                            // FINAL FLUSH (critical)
+                            if (current.buffer) {
+                                useChatStore
+                                    .getState()
+                                    .appendToken(
+                                        current.assistantId,
+                                        current.buffer,
+                                    );
+                                current.buffer = "";
+                            }
+
+                            stopStream(conversationId, false); // NO backend call
+                            break;
+                        }
+
+                        case "error": {
+                            current.finished = true;
+
+                            useChatStore
+                                .getState()
+                                .setMessageContent(
+                                    current.assistantId,
+                                    `Error: ${
+                                        event.error || "Streaming failed"
+                                    }`,
+                                );
+
+                            stopStream(conversationId, false);
+                            break;
+                        }
+
+                        case "aborted": {
+                            current.finished = true;
+                            current.isAborted = true;
+                            stopStream(conversationId, false);
+                            useChatStore.getState().finalizeMessage(true);
+                            break;
+                        }
                     }
                 },
+
                 {
                     onCreated: ({ conversationId: newId }) => {
-                        // Refresh history immediately
                         invalidateConversations();
 
                         if (isNew && newId) {
-                            // Update UI highlight only (prevents MessageList re-render)
                             useChatStore.getState().setUiActiveId(newId);
 
-                            // Update URL without triggering React Router re-render
                             window.history.replaceState(
                                 null,
                                 "",
@@ -143,25 +217,23 @@ export const useStreaming = () => {
             );
 
             streamState.stop = stop;
+
             const result = await promise;
 
-            // Finalize navigation and store state after stream finishes
             if (isNew && result.conversationId) {
-                // Sync stream state to new ID
                 streamsRef.current.set(result.conversationId, streamState);
                 streamsRef.current.delete("new");
 
-                // Update store and trigger formal navigation (no-op since URL is already set)
                 useChatStore
                     .getState()
                     .updateActiveConversationId(result.conversationId);
+
                 navigate(`/app/chat/${result.conversationId}`, {
                     replace: true,
                 });
             }
         } catch (error) {
             const current = streamsRef.current.get(conversationId);
-
             if (!current) return;
 
             const message =
@@ -170,20 +242,25 @@ export const useStreaming = () => {
             useChatStore
                 .getState()
                 .setMessageContent(
-                    assistantId,
+                    current.assistantId,
                     `Unable to get a response: ${message}`,
                 );
         } finally {
-            stopStream(conversationId === "new" ? "new" : conversationId);
+            // DO NOT call backend stop here
+            const current = streamsRef.current.get(conversationId);
+            if (current && !current.finished) {
+                stopStream(conversationId, true);
+            }
         }
     };
 
     const stopStreaming = (conversationId: string) => {
         const stream = streamsRef.current.get(conversationId);
         if (!stream) return;
+        stream.isAborted = true;
 
         if (stream.stop) {
-            stream.stop();
+            stream.stop(); // manual user abort
             stream.stop = null;
         }
 
@@ -198,8 +275,7 @@ export const useStreaming = () => {
             state.appendToken(stream.assistantId, stream.buffer);
         }
 
-        state.finalizeMessage();
-
+        state.finalizeMessage(true);
         streamsRef.current.delete(conversationId);
     };
 

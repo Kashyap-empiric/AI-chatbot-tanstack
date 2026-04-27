@@ -16,6 +16,12 @@ const toGeminiMessages = (messages: AIMessage[]) => {
     }));
 };
 
+type StreamOptions = {
+    model: string;
+    messages: AIMessage[];
+    signal?: AbortSignal;
+};
+
 export class GeminiAdapter implements AIAdapter {
     private client = getClient();
 
@@ -33,41 +39,61 @@ export class GeminiAdapter implements AIAdapter {
 
         return {
             text: response.text || "",
-            modelVersion: response?.modelVersion,
+            modelVersion: response?.modelVersion || null,
         };
     }
 
     async *stream({
         model,
         messages,
-    }: {
-        model: string;
-        messages: AIMessage[];
-    }): AsyncGenerator<AIStreamChunk> {
-        const stream = await this.client.models.generateContentStream({
-            model,
-            contents: toGeminiMessages(messages),
-            config: { responseModalities: ["TEXT"] },
-        });
+        signal,
+    }: StreamOptions): AsyncGenerator<AIStreamChunk> {
+        let stream;
 
-        let fullText = "";
-
-        for await (const chunk of stream) {
-            const text = chunk?.text || "";
-            if (!text) continue;
-
-            fullText += text;
+        try {
+            stream = await this.client.models.generateContentStream({
+                model,
+                contents: toGeminiMessages(messages),
+                config: { responseModalities: ["TEXT"] },
+                signal, // critical for abort
+            });
+        } catch (error) {
             yield {
-                text,
-                done: false,
+                type: "error",
+                error: "STREAM_INIT_FAILED",
             };
+            return;
         }
 
-        console.log("STREAM FINISHED, total length:", fullText.length);
+        try {
+            for await (const chunk of stream) {
+                if (signal?.aborted) {
+                    yield { type: "aborted" };
+                    return;
+                }
 
-        yield {
-            text: "",
-            done: true,
-        };
+                const text = chunk?.text || "";
+                if (!text) continue;
+
+                yield {
+                    type: "delta",
+                    text,
+                };
+            }
+
+            yield {
+                type: "done",
+            };
+        } catch (error) {
+            if (signal?.aborted) {
+                yield { type: "aborted" };
+                return;
+            }
+
+            yield {
+                type: "error",
+                error: "STREAM_RUNTIME_ERROR",
+            };
+        }
     }
 }

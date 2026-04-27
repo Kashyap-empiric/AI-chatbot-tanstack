@@ -10,11 +10,17 @@ export const fetchMessage = async (
     return Array.isArray(res.data) ? res.data : [];
 };
 
+type StreamEvent =
+    | { type: "meta"; conversationId?: string; [key: string]: any }
+    | { type: "delta"; text: string }
+    | { type: "done" }
+    | { type: "error"; error?: string }
+    | { type: "aborted" };
+
 export const streamMessage = (
     payload: { conversationId: string; content: string; model?: string },
-    onToken: (token: string) => void,
+    onEvent: (event: StreamEvent) => void,
     options?: {
-        onDone?: (metadata: unknown) => void;
         onSource?: (source: EventSource) => void;
         onCreated?: (data: { conversationId: string }) => void;
     },
@@ -29,8 +35,23 @@ export const streamMessage = (
         }
     };
 
-    const stop = () => {
+    const stop = async () => {
         closed = true;
+
+        try {
+            if (source) {
+                const match = source.url.match(/\/stream\/([^/]+)/);
+                const streamId = match?.[1];
+
+                if (streamId) {
+                    // call backend abort endpoint
+                    await http.post(`/chat/stream/${streamId}/stop`);
+                }
+            }
+        } catch {
+            // ignore stop errors
+        }
+
         cleanup();
     };
 
@@ -61,18 +82,12 @@ export const streamMessage = (
                     { withCredentials: true },
                 );
 
-                // Pass the source back to the caller if needed
                 options?.onSource?.(source);
 
-                const finish = (
-                    resolveFn: (data: {
-                        streamId: string;
-                        conversationId: string;
-                    }) => void,
-                ) => {
+                const finish = () => {
                     safeCall(() => {
                         cleanup();
-                        resolveFn({ streamId, conversationId });
+                        resolve({ streamId, conversationId });
                     });
                 };
 
@@ -83,45 +98,73 @@ export const streamMessage = (
                     });
                 };
 
-            source.onopen = () => {
-                if (closed) cleanup();
-            };
+                source.onopen = () => {
+                    if (closed) cleanup();
+                };
 
-            source.addEventListener("delta", (event) => {
-                if (closed) return;
+                // META
+                source.addEventListener("meta", (event) => {
+                    if (closed) return;
 
-                try {
-                    const message = JSON.parse((event as MessageEvent).data);
-                    if (message?.text) {
-                        onToken(message.text);
+                    try {
+                        const data = JSON.parse((event as MessageEvent).data);
+                        onEvent({ type: "meta", ...data });
+                    } catch {
+                        // Ignore malformed meta chunks
                     }
-                } catch {
-                    // ignore malformed chunk
-                }
-            });
+                });
 
-            source.addEventListener("complete", (event) => {
-                if (closed) return;
+                // DELTA
+                source.addEventListener("delta", (event) => {
+                    if (closed) return;
 
-                try {
-                    const message = JSON.parse((event as MessageEvent).data);
-                    options?.onDone?.(message.metadata);
-                } finally {
-                    finish(resolve);
-                }
-            });
+                    try {
+                        const data = JSON.parse((event as MessageEvent).data);
+                        if (data?.text) {
+                            onEvent({ type: "delta", text: data.text });
+                        }
+                    } catch {
+                        // Ignore malformed delta chunks
+                    }
+                });
 
-            source.addEventListener("error", () => {
-                if (closed) return;
+                // DONE
+                source.addEventListener("done", () => {
+                    if (closed) return;
 
-                /**
-                 * EventSource "error" is NOT always fatal.
-                 * But in most server setups without auto-reconnect handling,
-                 * we treat it as terminal.
-                 */
-                fail(new Error("SSE connection failed or closed"));
-            });
-        });
+                    onEvent({ type: "done" });
+                    finish();
+                });
+
+                // ABORTED
+                source.addEventListener("aborted", () => {
+                    if (closed) return;
+
+                    onEvent({ type: "aborted" });
+                    finish();
+                });
+
+                // ERROR (from server)
+                source.addEventListener("error", (event) => {
+                    if (closed) return;
+
+                    try {
+                        const data = JSON.parse((event as MessageEvent).data);
+                        onEvent({ type: "error", error: data?.error });
+                    } catch {
+                        onEvent({ type: "error", error: "Stream error" });
+                    }
+
+                    fail(new Error("SSE stream error"));
+                });
+
+                // NETWORK ERROR (EventSource internal)
+                source.onerror = () => {
+                    if (closed) return;
+                    fail(new Error("SSE connection failed"));
+                };
+            },
+        );
     })();
 
     return {

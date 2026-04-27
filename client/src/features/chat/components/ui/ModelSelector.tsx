@@ -1,33 +1,33 @@
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 
 type ModelSelectorProps = {
-  value: string;
-  onChange: (value: string) => void;
+    value: string;
+    onChange: (value: string) => void;
 };
 
 const MODELS = [
-  "gemini-flash",
-  "llama-70b",
-  "llama-8b",
-  "phi-4-mini",
-  "deepseek-r1",
-  "kimi-k2",
-  "minimax-2.7",
-  "glm-4.7",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-3-flash",
+    "llama-70b",
+    "deepseek-r1",
+    "kimi-k2",
+    "minimax-2.7",
+    "glm-4.7",
 ];
 
 const ModelSelector = ({ value, onChange }: ModelSelectorProps) => {
-  return (
-    <div className="ml-1 mb-1 md:ml-3 md:mb-3">
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger
-          className="
+    return (
+        <div className="ml-1 mb-1 md:ml-3 md:mb-3">
+            <Select value={value} onValueChange={onChange}>
+                <SelectTrigger
+                    className="
             w-[130px]
             bg-transparent
             text-white
@@ -38,14 +38,14 @@ const ModelSelector = ({ value, onChange }: ModelSelectorProps) => {
             focus:ring-0
             hover:text-neutral-200
           "
-        >
-          <SelectValue />
-        </SelectTrigger>
+                >
+                    <SelectValue />
+                </SelectTrigger>
 
-        <SelectContent
-          position="popper"
-          sideOffset={8}
-          className="
+                <SelectContent
+                    position="popper"
+                    sideOffset={8}
+                    className="
             z-[9999]
             bg-[#2f2f2f]
             border border-neutral-700/60
@@ -53,13 +53,13 @@ const ModelSelector = ({ value, onChange }: ModelSelectorProps) => {
             rounded-xl
             overflow-hidden
           "
-        >
-          {MODELS.map((model) => (
-            <SelectItem
-              key={model}
-              value={model}
-              style={{ color: "white" }}
-              className="
+                >
+                    {MODELS.map((model) => (
+                        <SelectItem
+                            key={model}
+                            value={model}
+                            style={{ color: "white" }}
+                            className="
                 text-sm cursor-pointer
                 !text-white
                 data-[highlighted]:!text-white
@@ -68,14 +68,14 @@ const ModelSelector = ({ value, onChange }: ModelSelectorProps) => {
                 data-[highlighted]:bg-neutral-500/40
                 data-[state=checked]:bg-neutral-700/60
               "
-            >
-              {model}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
+                        >
+                            {model}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </div>
+    );
 };
 
 export default ModelSelector;

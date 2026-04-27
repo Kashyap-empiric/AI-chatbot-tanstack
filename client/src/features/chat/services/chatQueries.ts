@@ -15,6 +15,5 @@ export const useMessages = (conversationId?: string) => {
         queryFn: () => fetchMessage(conversationId!),
         enabled: !!conversationId && conversationId !== "new",
         select: (data) => (Array.isArray(data) ? data.map(mapMessage) : []),
-        staleTime: 10_000,
     });
 };

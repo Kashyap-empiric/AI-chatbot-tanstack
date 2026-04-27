@@ -1,84 +1,121 @@
-const FRAME_INTERVAL_MS = 40;
+const FRAME_INTERVAL_MS = 35;
 
-const MIN_CHARS_PER_FRAME = 2;
-const MAX_CHARS_PER_FRAME = 12;
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const wait = (ms: number) =>
-    new Promise((resolve) => setTimeout(resolve, ms));
-
-type SourceChunk = {
-    type: "token" | "done";
+type PacingInput = AsyncGenerator<{
+    type: "meta" | "delta" | "done" | "error" | "aborted";
     text?: string;
-    metadata?: unknown;
-};
+    error?: string;
+    [key: string]: any;
+}>;
 
 export const paceTextStream = async function* (
-    source: AsyncGenerator<SourceChunk>
-) {
-    let buffer = "";
-    let done = false;
-    let error: unknown = null;
-    let finalMetadata: unknown = null;
+    source: PacingInput,
+): AsyncGenerator<{
+    type: "meta" | "delta" | "done" | "error" | "aborted";
+    text?: string;
+    error?: string;
+    [key: string]: any;
+}> {
+    let error: string | null = null;
+    let aborted = false;
+
+    const controlQueue: any[] = [];
 
     /**
-     * Producer: fills buffer as fast as LLM emits
-     * No pacing logic here.
+     * PRODUCER (lossless ingestion layer)
      */
-    const producer = (async () => {
+    const producerPromise = (async () => {
         try {
             for await (const chunk of source) {
-                if (chunk.type === "token" && chunk.text) {
-                    buffer += chunk.text;
+                if (chunk.type === "meta") {
+                    controlQueue.push(chunk);
+                    continue;
+                }
+
+                if (chunk.type === "delta") {
+                    controlQueue.push(chunk);
+                    continue;
+                }
+
+                if (chunk.type === "error") {
+                    error = chunk.error || "UNKNOWN_ERROR";
+                    controlQueue.push(chunk);
+                    return;
+                }
+
+                if (chunk.type === "aborted") {
+                    aborted = true;
+                    controlQueue.push(chunk);
+                    return;
                 }
 
                 if (chunk.type === "done") {
-                    finalMetadata = chunk.metadata;
-                    done = true;
+                    controlQueue.push(chunk);
+                    return;
                 }
             }
-        } catch (err) {
-            error = err;
-        } finally {
-            done = true;
+        } catch {
+            error = "PACING_SOURCE_ERROR";
         }
     })();
 
+    let done = false;
+
     /**
-     * Consumer clock:
-     * - fixed interval
-     * - fixed max emission per tick
-     * - no adaptive sizing
+     * CONSUMER LOOP
      */
-    while (!done || buffer.length > 0) {
-        if (buffer.length === 0) {
-            await wait(FRAME_INTERVAL_MS);
+    while (!done || controlQueue.length > 0) {
+        /**
+         * 1. flush control events first
+         */
+        if (controlQueue.length > 0) {
+            const event = controlQueue.shift();
+
+            yield event;
+
+            if (event.type === "error") {
+                return;
+            }
+
+            if (event.type === "aborted") {
+                return;
+            }
+
+            if (event.type === "done") {
+                done = true;
+            }
+
             continue;
         }
 
-        const charsToEmit = Math.min(
-            MAX_CHARS_PER_FRAME,
-            Math.max(MIN_CHARS_PER_FRAME, MAX_CHARS_PER_FRAME)
-        );
-
-        const chunk = buffer.slice(0, charsToEmit);
-        buffer = buffer.slice(charsToEmit);
-
-        yield {
-            type: "delta",
-            text: chunk,
-        };
-
+        /**
+         * 2. idle wait for next frame
+         */
         await wait(FRAME_INTERVAL_MS);
     }
 
-    await producer;
+    /**
+     * ensure producer fully resolves
+     */
+    await producerPromise;
 
+    /**
+     * final terminal state
+     */
     if (error) {
-        throw error;
+        yield { type: "error", error };
+        return;
     }
 
-    yield {
-        type: "complete",
-        metadata: finalMetadata,
-    };
+    if (aborted) {
+        yield { type: "aborted" };
+        return;
+    }
+
+    /**
+     * IMPORTANT:
+     * DO NOT emit synthetic "done"
+     * upstream owns termination
+     */
 };

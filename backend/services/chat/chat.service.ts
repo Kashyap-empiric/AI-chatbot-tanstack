@@ -1,6 +1,6 @@
 import { buildContext } from "./context.service";
 import { getRecentMessages } from "./memory.service";
-import { AIMessage } from "../../adapters/base.adapter";
+import { AIStreamChunk } from "../../adapters/base.adapter";
 import { getAdapter } from "../../adapters/ai.adapter";
 import { selectModel } from "../ai/routing.service";
 
@@ -9,6 +9,7 @@ type ChatInput = {
     conversationId: string;
     content: string;
     model?: string;
+    signal?: AbortSignal;
 };
 
 export const chatService = async function* ({
@@ -16,7 +17,8 @@ export const chatService = async function* ({
     conversationId,
     content,
     model,
-}: ChatInput) {
+    signal,
+}: ChatInput): AsyncGenerator<AIStreamChunk> {
     const selectedModel = selectModel(model);
 
     console.log("[chat.service]", {
@@ -26,34 +28,41 @@ export const chatService = async function* ({
         model: selectedModel.model,
     });
 
-    /**
-     * IMPORTANT:
-     * No DB writes here.
-     * No side effects.
-     * This layer is pure generation only.
-     */
-
     const recentMessages = await getRecentMessages(conversationId);
-    const messages: AIMessage[] = buildContext(recentMessages);
+    const messages = buildContext(recentMessages);
 
     const adapter = getAdapter(selectedModel.provider);
 
-    const stream = adapter.stream({
+    // single meta event
+    yield {
+        type: "meta",
         model: selectedModel.model,
-        messages,
-    });
+        provider: selectedModel.provider,
+    };
 
     try {
+        const stream = adapter.stream({
+            model: selectedModel.model,
+            messages,
+            signal,
+        });
+
         for await (const chunk of stream) {
-            const text = chunk?.text || "";
+            if (signal?.aborted) {
+                yield { type: "aborted" };
+                return;
+            }
 
-            if (!text) continue;
+            yield chunk;
 
-            // PURE PASS-THROUGH STREAM
-            yield {
-                type: "token",
-                text,
-            };
+            // IMPORTANT: do NOT break early on done if pacing layer still processing
+            if (chunk.type === "error") {
+                break;
+            }
+
+            if (chunk.type === "aborted") {
+                break;
+            }
         }
     } catch (error) {
         console.error("[chat.service] stream error", {
@@ -63,7 +72,15 @@ export const chatService = async function* ({
             error: error instanceof Error ? error.message : error,
         });
 
-        throw error;
+        if (signal?.aborted) {
+            yield { type: "aborted" };
+            return;
+        }
+
+        yield {
+            type: "error",
+            error: "CHAT_STREAM_FAILED",
+        };
     }
 
     console.log("[chat.service]", {

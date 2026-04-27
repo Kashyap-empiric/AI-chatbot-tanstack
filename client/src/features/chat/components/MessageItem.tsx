@@ -52,9 +52,8 @@ const MessageItem = ({ message }: { message: Message }) => {
                             )}
 
                             {/* NEW: INTERRUPTED PARTIAL RESPONSE */}
-                            {!isStreaming &&
-                                hasContent &&
-                                message.role === "model" && (
+                            {message.isAborted &&
+                                message.role === "assistant" && (
                                     <div className="mt-2 text-xs text-neutral-500 italic">
                                         Stopped
                                     </div>
