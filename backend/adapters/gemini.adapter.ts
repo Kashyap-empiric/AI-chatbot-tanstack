@@ -1,12 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
 import { AIMessage, AIAdapter, AIStreamChunk } from "./base.adapter";
+import { aiStream } from "../ai/stream/aiStream";
 
 const getClient = () => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         throw new Error("GEMINI_API_KEY is not defined");
     }
-    return new GoogleGenAI({ apiKey });
+    return new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1beta" } });
 };
 
 const toGeminiMessages = (messages: AIMessage[]) => {
@@ -48,42 +49,23 @@ export class GeminiAdapter implements AIAdapter {
         messages,
         signal,
     }: StreamOptions): AsyncGenerator<AIStreamChunk> {
-        let stream;
-
         try {
-            stream = await this.client.models.generateContentStream({
+            const stream = await this.client.models.generateContentStream({
                 model,
                 contents: toGeminiMessages(messages),
                 config: { responseModalities: ["TEXT"] },
-                signal, // critical for abort
+                signal,
             });
-        } catch (error) {
-            yield {
-                type: "error",
-                error: "STREAM_INIT_FAILED",
-            };
-            return;
-        }
 
-        try {
-            for await (const chunk of stream) {
-                if (signal?.aborted) {
-                    yield { type: "aborted" };
-                    return;
-                }
+            yield* aiStream<any>({
+                signal,
 
-                const text = chunk?.text || "";
-                if (!text) continue;
+                factory: async () => stream,
 
-                yield {
-                    type: "delta",
-                    text,
-                };
-            }
-
-            yield {
-                type: "done",
-            };
+                extract: (chunk: any) => ({
+                    text: chunk?.text,
+                }),
+            });
         } catch (error) {
             if (signal?.aborted) {
                 yield { type: "aborted" };
@@ -92,7 +74,7 @@ export class GeminiAdapter implements AIAdapter {
 
             yield {
                 type: "error",
-                error: "STREAM_RUNTIME_ERROR",
+                error: "STREAM_INIT_FAILED",
             };
         }
     }

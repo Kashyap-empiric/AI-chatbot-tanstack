@@ -1,5 +1,4 @@
 import { useNavigate } from "react-router-dom";
-import { useCreateConversation } from "../../conversation/services/conversationQueries";
 
 const ChatHome = () => {
     const navigate = useNavigate();

@@ -12,11 +12,11 @@ export const MODELS: Record<string, ModelConfig> = {
     },
     "gemini-3-flash": {
         provider: "gemini",
-        model: "gemini-3-flash",
+        model: "gemini-3-flash-preview",
     },
-    "gemini-3.1-flash-lite": {
+    "gemini-3.1-flash-lite-preview": {
         provider: "gemini",
-        model: "gemini-3.1-flash-lite",
+        model: "gemini-3.1-flash-lite-preview",
     },
     "llama-70b": {
         provider: "nvidia",

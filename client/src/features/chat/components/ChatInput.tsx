@@ -7,7 +7,7 @@ import ModelSelector from "./ui/ModelSelector";
 
 const ChatInput = () => {
     const [input, setInput] = useState("");
-    const [model, setModel] = useState("gemini-3.1-flash-lite");
+    const [model, setModel] = useState("gemini-2.5-flash-lite");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const { id: conversationId } = useParams();
