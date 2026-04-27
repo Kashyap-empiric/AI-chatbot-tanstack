@@ -13,7 +13,7 @@ type ChatState = {
   uiActiveId: string | null;
 
   setActiveConversation: (id: string | null) => void;
-  updateActiveConversationId: (id: string) => void;
+  updateActiveConversationId: (id: string | null) => void;
   setUiActiveId: (id: string | null) => void;
   reset: () => void;
   setMessages: (messages: Message[]) => void;
@@ -33,6 +33,7 @@ type ChatState = {
 
 const initialState = {
   activeConversationId: null,
+  uiActiveId: null,
   messages: [],
   streamingId: null,
   isStreaming: false,
