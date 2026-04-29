@@ -7,6 +7,7 @@ export type Message = {
     createdAt: string;
     isStreaming?: boolean;
     isAborted?: boolean;
+    status?: "streaming" | "completed" | "aborted" | "error";
 };
 
 export interface ApiMessage {

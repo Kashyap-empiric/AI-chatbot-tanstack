@@ -50,11 +50,9 @@ const ChatInput = () => {
     return (
         <div className="w-full bg-[#212121] pt-4 pb-2 px-4">
             <div className="max-w-3xl mx-auto relative">
-                <div className="w-full bg-[#2f2f2f] rounded-2xl border border-neutral-700/50 focus-within:border-neutral-600 transition relative">
-                    {/* DESKTOP LAYOUT */}
-                    <div className="hidden sm:flex items-end">
-                        <ModelSelector value={model} onChange={setModel} />
-
+                <div className="w-full bg-[#2f2f2f] rounded-2xl border border-white/10 shadow-2xl focus-within:border-primary/40 transition-all duration-300">
+                    <div className="flex flex-col p-2 sm:p-3">
+                        {/* 1. TEXTAREA: Tightened padding and custom scrollbar */}
                         <textarea
                             ref={textareaRef}
                             value={input}
@@ -63,63 +61,58 @@ const ChatInput = () => {
                             placeholder="Message AI Chatbot..."
                             rows={1}
                             className="
-                w-full
-                p-4 pr-14
-                bg-transparent text-white
-                resize-none outline-none
-                max-h-52 overflow-y-auto
-              "
-                        />
-                    </div>
-
-                    {/* MOBILE LAYOUT */}
-                    <div className="flex sm:hidden flex-col">
-                        <textarea
-                            ref={textareaRef}
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Message AI Chatbot..."
-                            rows={1}
-                            className="
-                w-full
-                p-4
-                bg-transparent text-white
-                resize-none outline-none
-                max-h-52 overflow-y-auto
-              "
+                w-full 
+                bg-transparent text-white 
+                border-none focus:ring-0 
+                resize-none outline-none 
+                min-h-[40px] max-h-48
+                px-2 py-1
+                text-sm sm:text-base
+                overflow-y-auto
+                /* Custom Scrollbar Classes */
+                scrollbar-thin scrollbar-thumb-[#424754] scrollbar-track-transparent
+                [&::-webkit-scrollbar]:w-1
+                [&::-webkit-scrollbar-thumb]:bg-[#424754]
+                [&::-webkit-scrollbar-thumb]:rounded-full
+                [&::-webkit-scrollbar-thumb]:hover:bg-[#8c909f]
+            "
                         />
 
-                        <div className="px-2 pb-2">
-                            <ModelSelector value={model} onChange={setModel} />
+                        {/* 2. ACTION ROW: Compacted spacing */}
+                        <div className="flex items-center justify-between mt-1 px-1">
+                            {/* Left Side: Model Selector */}
+                            <div className="flex items-center scale-90 origin-left">
+                                <ModelSelector
+                                    value={model}
+                                    onChange={setModel}
+                                />
+                            </div>
+
+                            {/* Right Side: Send Button (Slightly smaller for compactness) */}
+                            <button
+                                onClick={() =>
+                                    isStreaming
+                                        ? handleStop()
+                                        : void handleSend()
+                                }
+                                disabled={!input.trim() && !isStreaming}
+                                className="
+                    w-8 h-8 sm:w-9 sm:h-9
+                    bg-white text-black rounded-full 
+                    flex items-center justify-center 
+                    hover:bg-neutral-200 active:scale-95 
+                    transition-all shadow-lg 
+                    disabled:bg-neutral-600/50 disabled:text-neutral-400
+                "
+                            >
+                                {isStreaming ? (
+                                    <Square className="w-4 h-4 fill-current" />
+                                ) : (
+                                    <ArrowUp className="w-5 h-5 stroke-[2.5]" />
+                                )}
+                            </button>
                         </div>
                     </div>
-
-                    {/* ACTION BUTTON */}
-                    <button
-                        onClick={() => {
-                            if (isStreaming) {
-                                handleStop();
-                            } else {
-                                void handleSend();
-                            }
-                        }}
-                        disabled={!input.trim() && !isStreaming}
-                        className="
-              absolute right-3 bottom-[10px]
-              p-2
-              bg-white text-black rounded-xl
-              hover:bg-neutral-200 transition-colors
-              disabled:bg-neutral-600 disabled:text-neutral-400
-              z-20
-            "
-                    >
-                        {isStreaming ? (
-                            <Square className="w-5 h-5" />
-                        ) : (
-                            <ArrowUp className="w-5 h-5" />
-                        )}
-                    </button>
                 </div>
 
                 <p className="text-center text-neutral-500 text-xs mt-1">

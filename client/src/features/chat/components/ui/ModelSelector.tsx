@@ -24,11 +24,11 @@ const MODELS = [
 
 const ModelSelector = ({ value, onChange }: ModelSelectorProps) => {
     return (
-        <div className="ml-1 mb-1 md:ml-3 md:mb-3">
+        <div className="ml-1 mb-1">
             <Select value={value} onValueChange={onChange}>
                 <SelectTrigger
                     className="
-            w-[130px]
+            w-[150px]
             bg-transparent
             text-white
             border border-neutral-700/60
