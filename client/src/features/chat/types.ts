@@ -1,13 +1,18 @@
 export type Role = "user" | "assistant";
 
+export type MessageStatus =
+    | "pending"
+    | "streaming"
+    | "completed"
+    | "aborted"
+    | "error";
+
 export type Message = {
     id: string;
     role: Role;
     content: string;
     createdAt: string;
-    isStreaming?: boolean;
-    isAborted?: boolean;
-    status?: "streaming" | "completed" | "aborted" | "error";
+    status: MessageStatus;
 };
 
 export interface ApiMessage {

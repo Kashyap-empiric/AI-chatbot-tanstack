@@ -21,7 +21,8 @@
     "mongoose": "^9.4.1",
     "morgan": "^1.10.1",
     "nodemon": "^3.1.14",
-    "openai": "^6.34.0"
+    "openai": "^6.34.0",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

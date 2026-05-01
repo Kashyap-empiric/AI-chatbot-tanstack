@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useLayoutEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useChatStore } from "../../../app/store/chatStore";
 import MessageItem from "./MessageItem";
 import { useMessages } from "../services/chatQueries";
+import { useStreaming } from "../hooks/useStreaming";
 
 const MessageList = () => {
     const { id: conversationId } = useParams();
@@ -24,7 +25,7 @@ const MessageList = () => {
 
     const { data: fetchedMessages = [], isLoading } =
         useMessages(conversationId);
-
+    const { reconnectStream } = useStreaming();
     /**
      * Set active conversation ONLY
      */
@@ -43,14 +44,14 @@ const MessageList = () => {
             !conversationId ||
             isLoading ||
             activeConversationId !== conversationId ||
-            hydratedConversationRef.current === conversationId ||
-            (streamingId && activeConversationId === conversationId)
+            hydratedConversationRef.current === conversationId
         ) {
             return;
         }
 
         setMessages(fetchedMessages);
         hydratedConversationRef.current = conversationId;
+        reconnectStream(conversationId);
     }, [
         activeConversationId,
         conversationId,
@@ -58,20 +59,18 @@ const MessageList = () => {
         isLoading,
         setMessages,
         streamingId,
+        reconnectStream,
     ]);
 
     /**
      * Scroll management
      */
-    useEffect(() => {
-        const id = requestAnimationFrame(() => {
-            bottomRef.current?.scrollIntoView({
-                behavior: "smooth",
-            });
+    useLayoutEffect(() => {
+        bottomRef.current?.scrollIntoView({
+            behavior: "auto",
+            block: "end",
         });
-
-        return () => cancelAnimationFrame(id);
-    }, [messages]);
+    }, [messages, streamingId]);
 
     if (!conversationId) {
         return (
@@ -96,7 +95,11 @@ const MessageList = () => {
                     <MessageItem key={msg.id} message={msg} />
                 ))}
 
-                <div ref={bottomRef} className="h-1" />
+                <div
+                    key={streamingId ?? "idle"}
+                    ref={bottomRef}
+                    className="h-1"
+                />
             </div>
         </div>
     );

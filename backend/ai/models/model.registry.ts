@@ -10,9 +10,13 @@ export const MODELS: Record<string, ModelConfig> = {
         provider: "gemini",
         model: "gemini-2.5-flash-lite",
     },
-    "gemini-3-flash": {
+    "gemini-2.5-flash": {
         provider: "gemini",
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
+    },
+    "gemini-2.0-flash": {
+        provider: "gemini",
+        model: "gemini-2.0-flash",
     },
     "gemini-3.1-flash-lite-preview": {
         provider: "gemini",
@@ -24,7 +28,7 @@ export const MODELS: Record<string, ModelConfig> = {
     },
     "gpt-oss-120b": {
         provider: "nvidia",
-        model: "nvidia/gpt-oss-120b",
+        model: "openai/gpt-oss-120b",
     },
     "deepseek-r1": {
         provider: "nvidia",

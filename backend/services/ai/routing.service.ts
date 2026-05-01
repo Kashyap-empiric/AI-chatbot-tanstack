@@ -1,7 +1,7 @@
 import { MODELS } from "../../ai/models/model.registry";
 
 export const selectModel = (modelId?: string) => {
-    const fallback = "gemini-2.5-flash-lite";
+    const fallback = "gpt-oss-120b";
 
     const selected = modelId ? MODELS[modelId] : undefined;
 
@@ -12,4 +12,3 @@ export const selectModel = (modelId?: string) => {
 
     return selected;
 };
-

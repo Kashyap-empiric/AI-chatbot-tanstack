@@ -1,11 +1,13 @@
-import { error } from "node:console";
 import Conversation from "../../models/Conversation";
 import Message from "../../models/Message";
 
-export const getMessagesService = async (userId: string, conversationId: string) => {
-    const convo = await Conversation.findOne({ _id: conversationId, userId});
+export const getMessagesService = async (
+    userId: string,
+    conversationId: string,
+) => {
+    const convo = await Conversation.findOne({ _id: conversationId, userId });
     if (!convo) {
-        return { error: "Conversation not found!"};
+        return { error: "Conversation not found!" };
     }
-    return Message.find({ conversationId }).sort({ createdAt: 1})
+    return Message.find({ conversationId }).sort({ createdAt: 1 });
 };

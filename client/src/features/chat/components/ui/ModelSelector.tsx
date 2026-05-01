@@ -14,8 +14,10 @@ type ModelSelectorProps = {
 const MODELS = [
     "gemini-3.1-flash-lite",
     "gemini-2.5-flash-lite",
-    "gemini-3-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
     "llama-70b",
+    "gpt-oss-120b",
     "deepseek-r1",
     "kimi-k2",
     "minimax-2.7",

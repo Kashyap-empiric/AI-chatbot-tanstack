@@ -1,0 +1,112 @@
+.
+├── backend
+│   ├── adapters
+│   │   ├── ai.adapter.ts
+│   │   ├── base.adapter.ts
+│   │   ├── gemini.adapter.ts
+│   │   └── nvidia.adapter.ts
+│   ├── ai
+│   │   ├── models
+│   │   │   └── model.registry.ts
+│   │   └── stream
+│   │       └── aiStream.ts
+│   ├── app.ts
+│   ├── config
+│   │   └── db.ts
+│   ├── controllers
+│   │   ├── chat.controller.ts
+│   │   └── conversation.controller.ts
+│   ├── middlewares
+│   │   └── getAuth.ts
+│   ├── models
+│   │   ├── Conversation.ts
+│   │   └── Message.ts
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── routes
+│   │   ├── chat.routes.ts
+│   │   └── conversation.routes.ts
+│   ├── server.ts
+│   ├── services
+│   │   ├── ai
+│   │   │   ├── ai.service.ts
+│   │   │   └── routing.service.ts
+│   │   ├── chat
+│   │   │   ├── chat.service.ts
+│   │   │   ├── context.service.ts
+│   │   │   ├── memory.service.ts
+│   │   │   ├── persistence-batching.service.ts
+│   │   │   ├── stream-pacing.service.ts
+│   │   │   └── stream-session.service.ts
+│   │   └── conversation
+│   │       ├── conversation.service.ts
+│   │       └── message.service.ts
+│   └── utils
+│       ├── dto.ts
+│       └── params.ts
+├── client
+│   ├── components.json
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── README.md
+│   ├── src
+│   │   ├── app
+│   │   │   └── store
+│   │   │       └── chatStore.ts
+│   │   ├── App.css
+│   │   ├── App.tsx
+│   │   ├── components
+│   │   │   └── ui
+│   │   │       ├── button.tsx
+│   │   │       └── select.tsx
+│   │   ├── features
+│   │   │   ├── chat
+│   │   │   │   ├── api.ts
+│   │   │   │   ├── components
+│   │   │   │   │   ├── ChatHome.tsx
+│   │   │   │   │   ├── ChatInput.tsx
+│   │   │   │   │   ├── ChatWindow.tsx
+│   │   │   │   │   ├── Markdown.tsx
+│   │   │   │   │   ├── MessageItem.tsx
+│   │   │   │   │   ├── MessageList.tsx
+│   │   │   │   │   └── ui
+│   │   │   │   │       ├── ModelSelector.tsx
+│   │   │   │   │       └── TypingIndicator.tsx
+│   │   │   │   ├── hooks
+│   │   │   │   │   └── useStreaming.ts
+│   │   │   │   ├── services
+│   │   │   │   │   └── chatQueries.ts
+│   │   │   │   └── types.ts
+│   │   │   └── conversation
+│   │   │       ├── api.ts
+│   │   │       ├── components
+│   │   │       │   ├── ConversationItem.tsx
+│   │   │       │   ├── SidebarDrawer.tsx
+│   │   │       │   └── Sidebar.tsx
+│   │   │       ├── services
+│   │   │       │   └── conversationQueries.ts
+│   │   │       └── types.ts
+│   │   ├── index.css
+│   │   ├── lib
+│   │   │   └── utils.ts
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   │   └── ChatPage.tsx
+│   │   ├── providers
+│   │   │   └── AuthProvider.tsx
+│   │   ├── router
+│   │   │   └── router.tsx
+│   │   ├── services
+│   │   │   └── http.ts
+│   │   └── shared
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+├── file_structure.txt
+├── fils.txt
+└── PROJECT_DOCUMENTATION.md
+
+36 directories, 73 files

@@ -17,14 +17,22 @@ type StreamEvent =
     | { type: "error"; error?: string }
     | { type: "aborted" };
 
-export const streamMessage = (
+type StreamOptions = {
+    onSource?: (source: EventSource) => void;
+    onCreated?: (data: { conversationId: string }) => void;
+};
+
+type StreamHandle = {
+    streamId: string;
+    conversationId: string;
+    stop: () => Promise<void>;
+};
+
+export const streamMessage = async (
     payload: { conversationId: string; content: string; model?: string },
     onEvent: (event: StreamEvent) => void,
-    options?: {
-        onSource?: (source: EventSource) => void;
-        onCreated?: (data: { conversationId: string }) => void;
-    },
-) => {
+    options?: StreamOptions,
+): Promise<StreamHandle> => {
     let closed = false;
     let source: EventSource | null = null;
 
@@ -35,140 +43,102 @@ export const streamMessage = (
         }
     };
 
-    const stop = async () => {
-        closed = true;
+    /**
+     * STEP 1: Create stream session (CRITICAL)
+     */
+    const sessionRes = await http.post("/chat", payload);
 
-        try {
-            if (source) {
-                const match = source.url.match(/\/stream\/([^/]+)/);
-                const streamId = match?.[1];
+    const streamId = sessionRes.data?.streamId;
+    const conversationId = sessionRes.data?.conversationId;
 
-                if (streamId) {
-                    // call backend abort endpoint
-                    await http.post(`/chat/stream/${streamId}/stop`);
-                }
-            }
-        } catch {
-            // ignore stop errors
-        }
+    if (!streamId) {
+        throw new Error("Unable to start chat stream");
+    }
 
-        cleanup();
-    };
+    if (conversationId) {
+        options?.onCreated?.({ conversationId });
+    }
+
+    /**
+     * STEP 2: Attach SSE
+     */
+    source = new EventSource(`${API_BASE_URL}/chat/stream/${streamId}`, {
+        withCredentials: true,
+    });
+
+    options?.onSource?.(source);
 
     const safeCall = (fn: () => void) => {
         if (!closed) fn();
     };
 
-    const promise = (async () => {
-        const sessionRes = await http.post("/chat", payload);
-        const streamId = sessionRes.data?.streamId;
-        const conversationId = sessionRes.data?.conversationId;
+    source.addEventListener("meta", (event) => {
+        if (closed) return;
+        try {
+            const data = JSON.parse((event as MessageEvent).data);
+            onEvent({ type: "meta", ...data });
+        } catch {}
+    });
 
-        if (conversationId) {
-            options?.onCreated?.({ conversationId });
-        }
+    source.addEventListener("delta", (event) => {
+        if (closed) return;
+        try {
+            const data = JSON.parse((event as MessageEvent).data);
+            if (data?.text) {
+                onEvent({ type: "delta", text: data.text });
+            }
+        } catch {}
+    });
 
-        if (!streamId) {
-            throw new Error("Unable to start chat stream");
-        }
+    source.addEventListener("done", () => {
+        safeCall(() => {
+            onEvent({ type: "done" });
+            cleanup();
+        });
+    });
 
-        return new Promise<{ streamId: string; conversationId: string }>(
-            (resolve, reject) => {
-                if (closed)
-                    return reject(new Error("Stream cancelled before start"));
+    source.addEventListener("aborted", () => {
+        safeCall(() => {
+            onEvent({ type: "aborted" });
+            cleanup();
+        });
+    });
 
-                source = new EventSource(
-                    `${API_BASE_URL}/chat/stream/${streamId}`,
-                    { withCredentials: true },
-                );
+    source.addEventListener("error", (event) => {
+        safeCall(() => {
+            try {
+                const data = JSON.parse((event as MessageEvent).data);
+                onEvent({ type: "error", error: data?.error });
+            } catch {
+                onEvent({ type: "error", error: "Stream error" });
+            }
+            cleanup();
+        });
+    });
 
-                options?.onSource?.(source);
+    source.onerror = () => {
+        safeCall(() => {
+            onEvent({ type: "error", error: "SSE connection failed" });
+            cleanup();
+        });
+    };
 
-                const finish = () => {
-                    safeCall(() => {
-                        cleanup();
-                        resolve({ streamId, conversationId });
-                    });
-                };
+    /**
+     * STOP
+     */
+    const stop = async () => {
+        closed = true;
 
-                const fail = (err: Error) => {
-                    safeCall(() => {
-                        cleanup();
-                        reject(err);
-                    });
-                };
+        try {
+            await http.post(`/chat/stream/${streamId}/stop`);
+        } catch {}
 
-                source.onopen = () => {
-                    if (closed) cleanup();
-                };
-
-                // META
-                source.addEventListener("meta", (event) => {
-                    if (closed) return;
-
-                    try {
-                        const data = JSON.parse((event as MessageEvent).data);
-                        onEvent({ type: "meta", ...data });
-                    } catch {
-                        // Ignore malformed meta chunks
-                    }
-                });
-
-                // DELTA
-                source.addEventListener("delta", (event) => {
-                    if (closed) return;
-
-                    try {
-                        const data = JSON.parse((event as MessageEvent).data);
-                        if (data?.text) {
-                            onEvent({ type: "delta", text: data.text });
-                        }
-                    } catch {
-                        // Ignore malformed delta chunks
-                    }
-                });
-
-                // DONE
-                source.addEventListener("done", () => {
-                    if (closed) return;
-
-                    onEvent({ type: "done" });
-                    finish();
-                });
-
-                // ABORTED
-                source.addEventListener("aborted", () => {
-                    if (closed) return;
-
-                    onEvent({ type: "aborted" });
-                    finish();
-                });
-
-                // ERROR (from server)
-                source.addEventListener("error", (event) => {
-                    if (closed) return;
-
-                    try {
-                        const data = JSON.parse((event as MessageEvent).data);
-                        onEvent({ type: "error", error: data?.error });
-                    } catch {
-                        onEvent({ type: "error", error: "Stream error" });
-                    }
-
-                    fail(new Error("SSE stream error"));
-                });
-
-                // NETWORK ERROR (EventSource internal)
-                source.onerror = () => {
-                    if (closed) return;
-                    fail(new Error("SSE connection failed"));
-                };
-            },
-        );
-    })();
+        cleanup();
+    };
 
     return {
-        promise,
+        streamId,
+        conversationId,
         stop,
     };
 };

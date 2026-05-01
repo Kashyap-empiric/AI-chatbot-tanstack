@@ -7,6 +7,7 @@ const mapMessage = (message: ApiMessage): Message => ({
     role: message.role,
     content: message.content,
     createdAt: message.createdAt,
+    status: "completed",
 });
 
 export const useMessages = (conversationId?: string) => {
@@ -14,6 +15,10 @@ export const useMessages = (conversationId?: string) => {
         queryKey: ["messages", conversationId],
         queryFn: () => fetchMessage(conversationId!),
         enabled: !!conversationId && conversationId !== "new",
-        select: (data) => (Array.isArray(data) ? data.map(mapMessage) : []),
+        select: (data): Message[] => {
+            if (!Array.isArray(data)) return [];
+            return data.map(mapMessage);
+        },
+        staleTime: 1000 * 30,
     });
 };

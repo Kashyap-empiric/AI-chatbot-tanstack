@@ -1,20 +1,29 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { Message } from "../../features/chat/types";
+
+export type MessageStatus =
+    | "pending"
+    | "streaming"
+    | "completed"
+    | "aborted"
+    | "error";
 
 type ChatState = {
     activeConversationId: string | null;
+    uiActiveId: string | null;
+
     messages: Message[];
 
     streamingId: string | null;
-    isStreaming: boolean;
-
-    // NEW: allows external cancel coordination
     stopRequested: boolean;
-    uiActiveId: string | null;
+
+    streamMap: Record<string, string>;
 
     setActiveConversation: (id: string | null) => void;
     updateActiveConversationId: (id: string | null) => void;
     setUiActiveId: (id: string | null) => void;
+
     reset: () => void;
     setMessages: (messages: Message[]) => void;
 
@@ -26,135 +35,182 @@ type ChatState = {
 
     finalizeMessage: (isAborted?: boolean) => void;
 
-    // NEW: explicit stop signal
     requestStop: () => void;
     clearStop: () => void;
+
+    setStreamId: (conversationId: string, streamId: string) => void;
+    clearStreamId: (conversationId: string) => void;
 };
 
 const initialState = {
     activeConversationId: null,
     uiActiveId: null,
+
     messages: [],
+
     streamingId: null,
-    isStreaming: false,
     stopRequested: false,
+
+    streamMap: {},
 };
 
-export const useChatStore = create<ChatState>((set, get) => ({
-    ...initialState,
+export const useChatStore = create<ChatState>()(
+    persist(
+        (set, get) => ({
+            ...initialState,
 
-    setActiveConversation: (id) => {
-        set({
-            activeConversationId: id,
-            uiActiveId: id,
-            messages: [],
-            streamingId: null,
-            isStreaming: false,
-            stopRequested: false,
-        });
-    },
+            setActiveConversation: (id) => {
+                set({
+                    activeConversationId: id,
+                    uiActiveId: id,
+                    messages: [],
+                    streamingId: null,
+                    stopRequested: false,
+                });
+            },
 
-    setUiActiveId: (id) => {
-        set({ uiActiveId: id });
-    },
+            setUiActiveId: (id) => set({ uiActiveId: id }),
 
-    updateActiveConversationId: (id) => {
-        set({ activeConversationId: id });
-    },
+            updateActiveConversationId: (id) =>
+                set({ activeConversationId: id }),
 
-    reset: () => {
-        set({
-            messages: [],
-            streamingId: null,
-            isStreaming: false,
-            stopRequested: false,
-        });
-    },
+            reset: () =>
+                set({
+                    messages: [],
+                    streamingId: null,
+                    stopRequested: false,
+                }),
 
-    setMessages: (messages) => {
-        set({ messages });
-    },
+            setMessages: (messages) => set({ messages }),
 
-    appendUserMessage: (content) => {
-        const msg: Message = {
-            id: crypto.randomUUID(),
-            role: "user",
-            content,
-            createdAt: new Date().toISOString(),
-        };
+            /**
+             * USER MESSAGE
+             */
+            appendUserMessage: (content) => {
+                const msg: Message = {
+                    id: crypto.randomUUID(),
+                    role: "user",
+                    content,
+                    createdAt: new Date().toISOString(),
+                    status: "completed",
+                };
 
-        set((s) => ({
-            messages: [...s.messages, msg],
-        }));
-    },
+                set((s) => ({
+                    messages: [...s.messages, msg],
+                }));
+            },
 
-    appendAssistantMessage: () => {
-        const id = `ai-${crypto.randomUUID()}`;
+            /**
+             * ASSISTANT MESSAGE (START STATE = pending)
+             */
+            appendAssistantMessage: () => {
+                const id = `ai-${crypto.randomUUID()}`;
 
-        const msg: Message = {
-            id,
-            role: "assistant",
-            content: "",
-            createdAt: new Date().toISOString(),
-            isStreaming: true,
-        };
+                const msg: Message = {
+                    id,
+                    role: "assistant",
+                    content: "",
+                    createdAt: new Date().toISOString(),
+                    status: "pending",
+                };
 
-        set((s) => ({
-            messages: [...s.messages, msg],
-            streamingId: id,
-            isStreaming: true,
-            stopRequested: false,
-        }));
+                set((s) => ({
+                    messages: [...s.messages, msg],
+                    streamingId: id,
+                    stopRequested: false,
+                }));
 
-        return id;
-    },
+                return id;
+            },
 
-    appendToken: (id, token) => {
-        const { streamingId, stopRequested } = get();
+            /**
+             * TOKEN APPEND
+             */
+            appendToken: (id, token) => {
+                const { streamingId, stopRequested } = get();
 
-        // CRITICAL: stop blocks all incoming tokens
-        if (stopRequested || streamingId !== id) return;
+                if (stopRequested || streamingId !== id) return;
 
-        set((s) => ({
-            messages: s.messages.map((m) =>
-                m.id === id ? { ...m, content: m.content + token } : m,
-            ),
-        }));
-    },
+                set((s) => ({
+                    messages: s.messages.map((m) => {
+                        if (m.id !== id) return m;
 
-    setMessageContent: (id, content) => {
-        set((s) => ({
-            messages: s.messages.map((m) =>
-                m.id === id ? { ...m, content } : m,
-            ),
-        }));
-    },
+                        const nextContent = m.content + token;
 
-    finalizeMessage: (isAborted: boolean = false) => {
-        const { streamingId } = get();
+                        return {
+                            ...m,
+                            content: nextContent,
+                            status:
+                                m.status === "pending" ? "streaming" : m.status,
+                        };
+                    }),
+                }));
+            },
 
-        set((s) => ({
-            isStreaming: false,
-            streamingId: null,
-            stopRequested: false,
-            messages: s.messages.map((m) =>
-                m.id === streamingId
-                    ? { ...m, isStreaming: false, isAborted }
-                    : m,
-            ),
-        }));
-    },
+            /**
+             * DIRECT OVERRIDE (errors, etc.)
+             */
+            setMessageContent: (id, content) => {
+                set((s) => ({
+                    messages: s.messages.map((m) =>
+                        m.id === id ? { ...m, content } : m,
+                    ),
+                }));
+            },
 
-    requestStop: () => {
-        set({
-            stopRequested: true,
-            isStreaming: false,
-        });
-    },
+            /**
+             * FINALIZE STREAM
+             */
+            finalizeMessage: (isAborted: boolean = false) => {
+                const { streamingId } = get();
 
-    clearStop: () => {
-        set({
-            stopRequested: false,
-        });
-    },
-}));
+                set((s) => ({
+                    streamingId: null,
+                    stopRequested: false,
+
+                    messages: s.messages.map((m) =>
+                        m.id === streamingId
+                            ? {
+                                  ...m,
+                                  status: isAborted ? "aborted" : "completed",
+                              }
+                            : m,
+                    ),
+                }));
+            },
+
+            requestStop: () =>
+                set({
+                    stopRequested: true,
+                }),
+
+            clearStop: () => set({ stopRequested: false }),
+
+            /**
+             * STREAM MAPPING (reconnect support)
+             */
+            setStreamId: (conversationId, streamId) => {
+                set((s) => ({
+                    streamMap: {
+                        ...s.streamMap,
+                        [conversationId]: streamId,
+                    },
+                }));
+            },
+
+            clearStreamId: (conversationId) => {
+                set((s) => {
+                    const copy = { ...s.streamMap };
+                    delete copy[conversationId];
+                    return { streamMap: copy };
+                });
+            },
+        }),
+        {
+            name: "chat-store",
+            partialize: (state) => ({
+                streamMap: state.streamMap,
+            }),
+        },
+    ),
+);

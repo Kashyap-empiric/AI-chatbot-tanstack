@@ -7,7 +7,7 @@ const getClient = () => {
     if (!apiKey) {
         throw new Error("GEMINI_API_KEY is not defined");
     }
-    return new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1beta" } });
+    return new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1" } });
 };
 
 const toGeminiMessages = (messages: AIMessage[]) => {
@@ -53,8 +53,7 @@ export class GeminiAdapter implements AIAdapter {
             const stream = await this.client.models.generateContentStream({
                 model,
                 contents: toGeminiMessages(messages),
-                config: { responseModalities: ["TEXT"] },
-                signal,
+                // config: { responseModalities: ["TEXT"] },
             });
 
             yield* aiStream<any>({
@@ -74,7 +73,10 @@ export class GeminiAdapter implements AIAdapter {
 
             yield {
                 type: "error",
-                error: "STREAM_INIT_FAILED",
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : "STREAM_INIT_FAILED",
             };
         }
     }

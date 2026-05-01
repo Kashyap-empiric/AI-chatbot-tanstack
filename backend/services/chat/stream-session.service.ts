@@ -1,4 +1,22 @@
+import { chatService } from "./chat.service";
+import { paceTextStream } from "./stream-pacing.service";
+import { PersistenceBatcher } from "./persistence-batching.service";
+
+import Message from "../../models/Message";
+import Conversation from "../../models/Conversation";
+
 type ChatStreamStatus = "active" | "completed" | "aborted" | "error";
+
+type Subscriber = {
+    res: any;
+};
+
+type StreamChunk =
+    | { type: "meta"; [key: string]: any }
+    | { type: "delta"; text: string }
+    | { type: "done"; [key: string]: any }
+    | { type: "error"; error?: string }
+    | { type: "aborted" };
 
 type ChatStreamSession = {
     id: string;
@@ -10,44 +28,161 @@ type ChatStreamSession = {
     controller: AbortController;
     status: ChatStreamStatus;
 
+    buffer: StreamChunk[];
+    subscribers: Set<Subscriber>;
+
+    isRunning: boolean;
+
+    // ✅ persistence state
+    assistantMessageId: string;
+    userMessageId: string;
+    accumulatedContent: string;
+    batcher: PersistenceBatcher | null;
+
     createdAt: number;
     updatedAt: number;
 };
 
-const SESSION_TTL_MS = 5 * 60 * 1000;
-
 const sessions = new Map<string, ChatStreamSession>();
+const SESSION_TTL_MS = 5 * 60 * 1000;
 
 const now = () => Date.now();
 
-const removeExpiredSessions = () => {
-    const current = now();
-
-    for (const [id, session] of sessions.entries()) {
-        const isExpired = current - session.updatedAt > SESSION_TTL_MS;
-
-        // Do not kill active streams prematurely
-        if (isExpired && session.status !== "active") {
-            sessions.delete(id);
+/**
+ * Broadcast to all subscribers
+ */
+const broadcast = (session: ChatStreamSession, event: StreamChunk) => {
+    for (const sub of session.subscribers) {
+        try {
+            sub.res.write(`event: ${event.type}\n`);
+            sub.res.write(`data: ${JSON.stringify(event)}\n\n`);
+            sub.res.flush?.();
+        } catch {
+            // ignore broken connections
         }
     }
 };
 
+/**
+ * Start background execution
+ */
+const runStream = async (session: ChatStreamSession) => {
+    if (session.isRunning) return;
+    session.isRunning = true;
+
+    /**
+     * ✅ Setup batcher (DB persistence layer)
+     */
+    session.batcher = new PersistenceBatcher(
+        async (chunkText, isFinal) => {
+            session.accumulatedContent += chunkText;
+
+            await Message.findByIdAndUpdate(session.assistantMessageId, {
+                $set: {
+                    content: session.accumulatedContent,
+                    status: isFinal ? "completed" : "streaming",
+                },
+            });
+
+            if (isFinal) {
+                await Conversation.findByIdAndUpdate(session.conversationId, {
+                    $set: { lastMessageAt: new Date() },
+                    $inc: { messageCount: 2 },
+                });
+            }
+        },
+        {
+            flushIntervalMs: 800,
+            maxBufferLength: 800,
+        },
+    );
+
+    session.batcher.start();
+
+    try {
+        const stream = chatService({
+            userId: session.userId,
+            conversationId: session.conversationId,
+            content: session.content,
+            model: session.model,
+            signal: session.controller.signal,
+        });
+
+        for await (const chunk of paceTextStream(stream)) {
+            if (session.status !== "active") break;
+
+            session.buffer.push(chunk);
+            session.updatedAt = now();
+
+            broadcast(session, chunk);
+
+            if (chunk.type === "delta" && chunk.text) {
+                session.batcher.append(chunk.text);
+                continue;
+            }
+
+            if (chunk.type === "done") {
+                await session.batcher.finalize();
+                session.status = "completed";
+                break;
+            }
+
+            if (chunk.type === "error") {
+                session.batcher.stop();
+
+                await Message.findByIdAndUpdate(session.assistantMessageId, {
+                    $set: { status: "error" },
+                });
+
+                session.status = "error";
+                break;
+            }
+
+            if (chunk.type === "aborted") {
+                session.batcher.stop();
+
+                await Message.findByIdAndUpdate(session.assistantMessageId, {
+                    $set: { status: "aborted" },
+                });
+
+                session.status = "aborted";
+                break;
+            }
+        }
+    } catch {
+        session.status = "error";
+
+        session.batcher?.stop();
+
+        await Message.findByIdAndUpdate(session.assistantMessageId, {
+            $set: { status: "error" },
+        });
+    } finally {
+        session.isRunning = false;
+    }
+};
+
+/**
+ * CREATE SESSION
+ */
 export const createChatStreamSession = ({
     userId,
     conversationId,
     content,
     model,
+    assistantMessageId,
+    userMessageId,
 }: {
     userId: string;
     conversationId: string;
     content: string;
     model?: string;
+    assistantMessageId: string;
+    userMessageId: string;
 }) => {
-    removeExpiredSessions();
+    cleanup();
 
     const id = crypto.randomUUID();
-    const controller = new AbortController();
 
     const session: ChatStreamSession = {
         id,
@@ -55,38 +190,68 @@ export const createChatStreamSession = ({
         conversationId,
         content,
         model,
-        controller,
+
+        controller: new AbortController(),
         status: "active",
+
+        buffer: [],
+        subscribers: new Set(),
+
+        isRunning: false,
+
+        assistantMessageId,
+        userMessageId,
+        accumulatedContent: "",
+        batcher: null,
+
         createdAt: now(),
         updatedAt: now(),
     };
 
     sessions.set(id, session);
+
+    // ✅ start background execution immediately
+    runStream(session);
+
     return session;
 };
 
+/**
+ * GET SESSION
+ */
 export const getChatStreamSession = (id: string) => {
-    removeExpiredSessions();
-
-    const session = sessions.get(id);
-    if (!session) return null;
-
-    session.updatedAt = now();
-    return session;
+    cleanup();
+    return sessions.get(id) || null;
 };
 
-export const consumeChatStreamSession = (id: string) => {
-    const session = getChatStreamSession(id);
-    return session;
+/**
+ * SUBSCRIBE (replay + live)
+ */
+export const subscribeToStream = (session: ChatStreamSession, res: any) => {
+    const subscriber: Subscriber = { res };
+    session.subscribers.add(subscriber);
+
+    // ✅ replay entire buffer
+    for (const event of session.buffer) {
+        res.write(`event: ${event.type}\n`);
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+    }
+
+    res.flush?.();
+
+    return () => {
+        session.subscribers.delete(subscriber);
+    };
 };
 
+/**
+ * ABORT
+ */
 export const abortChatStreamSession = (id: string) => {
     const session = sessions.get(id);
     if (!session) return false;
 
-    if (session.status !== "active") {
-        return false;
-    }
+    if (session.status !== "active") return false;
 
     session.controller.abort();
     session.status = "aborted";
@@ -95,22 +260,21 @@ export const abortChatStreamSession = (id: string) => {
     return true;
 };
 
-export const completeChatStreamSession = (id: string) => {
-    const session = sessions.get(id);
-    if (!session) return;
+/**
+ * CLEANUP
+ */
+const cleanup = () => {
+    const current = now();
 
-    session.status = "completed";
-    session.updatedAt = now();
-};
+    for (const [id, session] of sessions.entries()) {
+        const expired = current - session.updatedAt > SESSION_TTL_MS;
 
-export const errorChatStreamSession = (id: string) => {
-    const session = sessions.get(id);
-    if (!session) return;
-
-    session.status = "error";
-    session.updatedAt = now();
-};
-
-export const deleteChatStreamSession = (id: string) => {
-    sessions.delete(id);
+        if (
+            expired &&
+            session.status !== "active" &&
+            session.subscribers.size === 0
+        ) {
+            sessions.delete(id);
+        }
+    }
 };
