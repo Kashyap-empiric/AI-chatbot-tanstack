@@ -10,10 +10,17 @@ const app = express();
 app.use(morgan("dev"));
 
 app.use(cors({
-    origin: ['http://localhost:5173'],
+    origin: ['http://localhost:5173', 'https://khz5bstr-5173.inc1.devtunnels.ms'],
     credentials: true
 }));
 app.use(express.json());
+app.use((req, res, next) => {
+    const token = req.query.token;
+    if (token && !req.headers.authorization) {
+        req.headers.authorization = `Bearer ${token}`;
+    }
+    next();
+});
 app.use(clerkMiddleware());
 app.disable("etag");
 

@@ -2,9 +2,10 @@ import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "../../../app/store/chatStore";
 import { useConversationActions } from "../../conversation/services/conversationQueries";
+import { useAuth } from "@clerk/react";
 import { streamMessage } from "../api";
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
 type StreamPayload = {
     conversationId: string;
@@ -21,6 +22,7 @@ type ActiveStream = {
 
 export const useStreaming = () => {
     const navigate = useNavigate();
+    const { getToken } = useAuth();
     const { invalidateConversations } = useConversationActions();
 
     const streamsRef = useRef<Map<string, ActiveStream>>(new Map());
@@ -91,38 +93,41 @@ export const useStreaming = () => {
 
         streamsRef.current.set(conversationId, stream);
 
-        const source = new EventSource(
-            `${API_BASE_URL}/chat/stream/${streamId}`,
-            { withCredentials: true },
-        );
+        void (async () => {
+            const token = await getToken();
+            const url = token
+                ? `${API_BASE_URL}/chat/stream/${streamId}?token=${token}`
+                : `${API_BASE_URL}/chat/stream/${streamId}`;
 
-        source.addEventListener("delta", (e) => {
-            const data = JSON.parse((e as MessageEvent).data);
-            if (!data?.text) return;
+            const source = new EventSource(url, { withCredentials: true });
 
-            stream.buffer += data.text;
-            startFrameLoop(conversationId);
-        });
+            source.addEventListener("delta", (e) => {
+                const data = JSON.parse((e as MessageEvent).data);
+                if (!data?.text) return;
 
-        source.addEventListener("done", () => {
-            flush(conversationId);
-            store.finalizeMessage(false);
-            store.clearStreamId(conversationId);
-            cleanupStream(conversationId);
-        });
+                stream.buffer += data.text;
+                startFrameLoop(conversationId);
+            });
 
-        source.addEventListener("aborted", () => {
-            flush(conversationId);
-            store.finalizeMessage(true);
-            store.clearStreamId(conversationId);
-            cleanupStream(conversationId);
-        });
+            source.addEventListener("done", () => {
+                flush(conversationId);
+                store.finalizeMessage(false);
+                store.clearStreamId(conversationId);
+                cleanupStream(conversationId);
+            });
 
-        source.addEventListener("error", () => {
-            flush(conversationId);
-            store.finalizeMessage(true);
-            cleanupStream(conversationId);
-        });
+            source.addEventListener("aborted", () => {
+                flush(conversationId);
+                store.finalizeMessage(true);
+                store.clearStreamId(conversationId);
+                cleanupStream(conversationId);
+            });
+
+            source.addEventListener("error", () => {
+                flush(conversationId);
+                cleanupStream(conversationId);
+            });
+        })();
     };
 
     /**
@@ -152,6 +157,7 @@ export const useStreaming = () => {
         streamsRef.current.set(conversationId, stream);
 
         try {
+            const token = await getToken();
             const handle = await streamMessage(
                 { conversationId, content, model },
                 (event) => {
@@ -215,6 +221,7 @@ export const useStreaming = () => {
                             break;
                     }
                 },
+                { token: token ?? undefined },
             );
 
             store.setStreamId(

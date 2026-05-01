@@ -1,7 +1,7 @@
 import { http } from "../../services/http";
 import type { ApiMessage } from "./types";
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
 export const fetchMessage = async (
     conversationId: string,
@@ -31,7 +31,7 @@ type StreamHandle = {
 export const streamMessage = async (
     payload: { conversationId: string; content: string; model?: string },
     onEvent: (event: StreamEvent) => void,
-    options?: StreamOptions,
+    options?: StreamOptions & { token?: string },
 ): Promise<StreamHandle> => {
     let closed = false;
     let source: EventSource | null = null;
@@ -62,7 +62,11 @@ export const streamMessage = async (
     /**
      * STEP 2: Attach SSE
      */
-    source = new EventSource(`${API_BASE_URL}/chat/stream/${streamId}`, {
+    const url = options?.token
+        ? `${API_BASE_URL}/chat/stream/${streamId}?token=${options.token}`
+        : `${API_BASE_URL}/chat/stream/${streamId}`;
+
+    source = new EventSource(url, {
         withCredentials: true,
     });
 

@@ -10,7 +10,7 @@ const MessageItem = ({ message }: { message: Message }) => {
     const isPending = status === "pending";
     const isStreaming = status === "streaming";
     const isAborted = status === "aborted";
-    const isCompleted = status === "completed";
+    // const isCompleted = status === "completed";
 
     return (
         <div className="w-full flex justify-center">
@@ -42,7 +42,7 @@ const MessageItem = ({ message }: { message: Message }) => {
                             {/* ABORTED INDICATOR */}
                             {isAborted && (
                                 <div
-                                    className={`text-neutral-500 italic ${hasContent ? "mt-2 text-xs" : "text-sm"}`}
+                                    className={`text-neutral-500 italic ${hasContent ? "mt-2 text-sm" : "text-sm"}`}
                                 >
                                     Response stopped
                                 </div>
