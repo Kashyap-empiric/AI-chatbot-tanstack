@@ -4,6 +4,9 @@ import { PersistenceBatcher } from "./persistence-batching.service";
 
 import Message from "../../models/Message";
 import Conversation from "../../models/Conversation";
+import { AIStreamChunk } from "../../adapters/base.adapter";
+
+type StreamChunk = AIStreamChunk;
 
 type ChatStreamStatus = "active" | "completed" | "aborted" | "error";
 
@@ -11,12 +14,6 @@ type Subscriber = {
     res: any;
 };
 
-type StreamChunk =
-    | { type: "meta"; [key: string]: any }
-    | { type: "delta"; text: string }
-    | { type: "done"; [key: string]: any }
-    | { type: "error"; error?: string }
-    | { type: "aborted" };
 
 type ChatStreamSession = {
     id: string;
@@ -33,7 +30,6 @@ type ChatStreamSession = {
 
     isRunning: boolean;
 
-    // ✅ persistence state
     assistantMessageId: string;
     userMessageId: string;
     accumulatedContent: string;
@@ -48,31 +44,20 @@ const SESSION_TTL_MS = 5 * 60 * 1000;
 
 const now = () => Date.now();
 
-/**
- * Broadcast to all subscribers
- */
 const broadcast = (session: ChatStreamSession, event: StreamChunk) => {
     for (const sub of session.subscribers) {
         try {
             sub.res.write(`event: ${event.type}\n`);
             sub.res.write(`data: ${JSON.stringify(event)}\n\n`);
             sub.res.flush?.();
-        } catch {
-            // ignore broken connections
-        }
+        } catch {}
     }
 };
 
-/**
- * Start background execution
- */
 const runStream = async (session: ChatStreamSession) => {
     if (session.isRunning) return;
     session.isRunning = true;
 
-    /**
-     * ✅ Setup batcher (DB persistence layer)
-     */
     session.batcher = new PersistenceBatcher(
         async (chunkText, isFinal) => {
             session.accumulatedContent += chunkText;
@@ -162,9 +147,6 @@ const runStream = async (session: ChatStreamSession) => {
     }
 };
 
-/**
- * CREATE SESSION
- */
 export const createChatStreamSession = ({
     userId,
     conversationId,
@@ -210,28 +192,20 @@ export const createChatStreamSession = ({
 
     sessions.set(id, session);
 
-    // ✅ start background execution immediately
     runStream(session);
 
     return session;
 };
 
-/**
- * GET SESSION
- */
 export const getChatStreamSession = (id: string) => {
     cleanup();
     return sessions.get(id) || null;
 };
 
-/**
- * SUBSCRIBE (replay + live)
- */
 export const subscribeToStream = (session: ChatStreamSession, res: any) => {
     const subscriber: Subscriber = { res };
     session.subscribers.add(subscriber);
 
-    // ✅ replay entire buffer
     for (const event of session.buffer) {
         res.write(`event: ${event.type}\n`);
         res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -244,9 +218,6 @@ export const subscribeToStream = (session: ChatStreamSession, res: any) => {
     };
 };
 
-/**
- * ABORT
- */
 export const abortChatStreamSession = (id: string) => {
     const session = sessions.get(id);
     if (!session) return false;
@@ -260,9 +231,6 @@ export const abortChatStreamSession = (id: string) => {
     return true;
 };
 
-/**
- * CLEANUP
- */
 const cleanup = () => {
     const current = now();
 

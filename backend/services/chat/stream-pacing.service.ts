@@ -2,29 +2,18 @@ const FRAME_INTERVAL_MS = 35;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-type PacingInput = AsyncGenerator<{
-    type: "meta" | "delta" | "done" | "error" | "aborted";
-    text?: string;
-    error?: string;
-    [key: string]: any;
-}>;
+import { AIStreamChunk } from "../../adapters/base.adapter";
+
+type PacingInput = AsyncGenerator<AIStreamChunk>;
 
 export const paceTextStream = async function* (
     source: PacingInput,
-): AsyncGenerator<{
-    type: "meta" | "delta" | "done" | "error" | "aborted";
-    text?: string;
-    error?: string;
-    [key: string]: any;
-}> {
+): AsyncGenerator<AIStreamChunk> {
     let error: string | null = null;
     let aborted = false;
 
-    const controlQueue: any[] = [];
+    const controlQueue: AIStreamChunk[] = [];
 
-    /**
-     * PRODUCER (lossless ingestion layer)
-     */
     const producerPromise = (async () => {
         try {
             for await (const chunk of source) {
@@ -62,15 +51,9 @@ export const paceTextStream = async function* (
 
     let done = false;
 
-    /**
-     * CONSUMER LOOP
-     */
     while (!done || controlQueue.length > 0) {
-        /**
-         * 1. flush control events first
-         */
         if (controlQueue.length > 0) {
-            const event = controlQueue.shift();
+            const event = controlQueue.shift()!;
 
             yield event;
 
@@ -89,20 +72,11 @@ export const paceTextStream = async function* (
             continue;
         }
 
-        /**
-         * 2. idle wait for next frame
-         */
         await wait(FRAME_INTERVAL_MS);
     }
 
-    /**
-     * ensure producer fully resolves
-     */
     await producerPromise;
 
-    /**
-     * final terminal state
-     */
     if (error) {
         yield { type: "error", error };
         return;
@@ -112,10 +86,4 @@ export const paceTextStream = async function* (
         yield { type: "aborted" };
         return;
     }
-
-    /**
-     * IMPORTANT:
-     * DO NOT emit synthetic "done"
-     * upstream owns termination
-     */
 };
