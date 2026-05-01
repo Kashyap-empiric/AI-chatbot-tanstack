@@ -13,7 +13,8 @@ const ChatInput = () => {
     const { id: conversationId } = useParams();
     const { startStreaming, stopStreaming } = useStreaming();
 
-    const isStreaming = useChatStore((state) => state.isStreaming);
+    const activeConversationId = useChatStore((state) => state.activeConversationId);
+    const isStreaming = useChatStore((state) => !!state.streamingId);
 
     useEffect(() => {
         if (textareaRef.current) {
@@ -35,9 +36,9 @@ const ChatInput = () => {
         });
     };
 
-    const handleStop = () => {
-        if (!conversationId) return;
-        stopStreaming(conversationId);
+    const handleStop = async () => {
+        if (!activeConversationId) return;
+        await stopStreaming(activeConversationId);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -92,7 +93,7 @@ const ChatInput = () => {
                             <button
                                 onClick={() =>
                                     isStreaming
-                                        ? handleStop()
+                                        ? void handleStop()
                                         : void handleSend()
                                 }
                                 disabled={!input.trim() && !isStreaming}

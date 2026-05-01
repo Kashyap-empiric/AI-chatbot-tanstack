@@ -26,33 +26,25 @@ const MessageItem = ({ message }: { message: Message }) => {
                         </div>
                     ) : (
                         <div className="w-full text-sm md:text-base leading-6 md:leading-7 text-neutral-100 break-words">
-                            {/* PENDING */}
-                            {isPending && !hasContent && <TypingIndicator />}
-
-                            {/* STREAMING */}
-                            {isStreaming && hasContent && (
+                            {/* CONTENT RENDERING */}
+                            {hasContent && (
                                 <div className="relative">
                                     <Markdown content={message.content} />
-                                    <span className="inline-block w-1 h-4 bg-neutral-400 animate-pulse ml-1" />
+                                    {isStreaming && (
+                                        <span className="inline-block w-1 h-4 bg-neutral-400 animate-pulse ml-1" />
+                                    )}
                                 </div>
                             )}
 
-                            {/* COMPLETED */}
-                            {isCompleted && hasContent && (
-                                <Markdown content={message.content} />
-                            )}
+                            {/* PENDING / EMPTY STATE */}
+                            {isPending && !hasContent && <TypingIndicator />}
 
-                            {/* ABORTED EMPTY */}
-                            {isAborted && !hasContent && (
-                                <div className="text-neutral-500 italic text-sm">
+                            {/* ABORTED INDICATOR */}
+                            {isAborted && (
+                                <div
+                                    className={`text-neutral-500 italic ${hasContent ? "mt-2 text-xs" : "text-sm"}`}
+                                >
                                     Response stopped
-                                </div>
-                            )}
-
-                            {/* ABORTED PARTIAL */}
-                            {isAborted && hasContent && (
-                                <div className="mt-2 text-xs text-neutral-500 italic">
-                                    Stopped
                                 </div>
                             )}
                         </div>

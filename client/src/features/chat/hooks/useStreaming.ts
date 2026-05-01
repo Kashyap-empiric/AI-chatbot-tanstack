@@ -234,14 +234,17 @@ export const useStreaming = () => {
         }
     };
 
-    const stopStreaming = (conversationId: string) => {
+    const stopStreaming = async (conversationId: string) => {
         const store = useChatStore.getState();
         const stream = streamsRef.current.get(conversationId);
 
-        stream?.stop?.();
+        if (stream?.stop) {
+            await stream.stop();
+        }
 
         store.clearStreamId(conversationId);
         store.requestStop();
+        store.finalizeMessage(true);
 
         cleanupStream(conversationId);
     };
